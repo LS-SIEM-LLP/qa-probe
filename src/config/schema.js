@@ -80,6 +80,17 @@ const ConfigSchema = z.object({
 
   // Output
   output: OutputSchema.default({}),
+
+  // Optional: shell command to seed the database. Shown in empty_db fix hints.
+  // Example: 'docker exec api python scripts/seed.py'
+  //          'npm run db:seed'
+  //          'make seed'
+  seedCommand: z.string().optional(),
+
+  // Optional: map path prefixes to custom HAS_* flag names for feature_flag_disabled hints.
+  // Auto-derived as HAS_SOME_FEATURE from /some-feature when not specified.
+  // Example: { '/credential-scanner': 'HAS_DEFAULT_CRED_SCANNER' }
+  featureFlagMap: z.record(z.string()).default({}),
 });
 
 module.exports = { ConfigSchema };

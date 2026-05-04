@@ -58,6 +58,20 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
     }
   }
 
+  // --- Rule 3: contract_mismatch (checked before missing_route) ---
+  // A fuzzy match is a better diagnosis than a generic "not found" — it tells the
+  // developer exactly which route to align to, rather than leaving them to search.
+  if (status === 404) {
+    const fuzzyMatch = findFuzzyBackendMatch(endpointKey, graph);
+    if (fuzzyMatch) {
+      return {
+        rootCause: 'contract_mismatch',
+        rootCauseDetail: `${endpointKey} → 404. Similar route exists: ${fuzzyMatch}`,
+        fixHint: 'Align the frontend call path to match the backend route. Check trailing slashes, prefix differences, or casing.',
+      };
+    }
+  }
+
   // --- Rule 2: missing_route ---
   if (status === 404) {
     const inSpec = isInBackendSpec(endpointKey, graph);
@@ -66,18 +80,6 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
         rootCause: 'missing_route',
         rootCauseDetail: `${endpointKey} → 404. Not found in OpenAPI spec.`,
         fixHint: 'Check for typos in the frontend API call path or a missing include_router() in backend/app/main.py.',
-      };
-    }
-  }
-
-  // --- Rule 3: contract_mismatch ---
-  if (status === 404) {
-    const fuzzyMatch = findFuzzyBackendMatch(endpointKey, graph);
-    if (fuzzyMatch) {
-      return {
-        rootCause: 'contract_mismatch',
-        rootCauseDetail: `${endpointKey} → 404. Similar route exists: ${fuzzyMatch}`,
-        fixHint: `Align the frontend call path to match the backend route. Check trailing slashes, prefix differences, or casing.`,
       };
     }
   }
@@ -111,10 +113,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   if (status === 200) {
     // --- Rule 4: empty_db ---
     if (empty) {
+      const seedCmd = config && config.seedCommand;
+      const seedHint = seedCmd
+        ? `Run: ${seedCmd}`
+        : 'Run your project\'s seed or fixture script to populate test data (set seedCommand in qa-probe.config.js to show the exact command here).';
       return {
         rootCause: 'empty_db',
         rootCauseDetail: `${endpointKey} → 200 but ${probeResult.emptyReason || 'empty body'}. No records in database.`,
-        fixHint: 'Seed the database. Run: docker exec -it ls-api python scripts/seed_demo_data.py',
+        fixHint: `Seed the database. ${seedHint}`,
       };
     }
 
@@ -202,7 +208,10 @@ function findFuzzyBackendMatch(endpointKey, graph) {
     const routeParts = routePath.split('/').filter(Boolean);
     if (Math.abs(callParts.length - routeParts.length) <= 1) {
       const shared = callParts.filter((p, i) => routeParts[i] === p || routeParts[i] === `{${p}}`);
-      if (shared.length >= Math.min(callParts.length, routeParts.length) - 1) {
+      // Require at least 1 shared segment so fully-unrelated paths don't match.
+      // When min segment count is N, allow at most 1 mismatch (N-1 shared required),
+      // but never accept 0 shared segments regardless of length delta.
+      if (shared.length >= 1 && shared.length >= Math.min(callParts.length, routeParts.length) - 1) {
         return routeKey;
       }
     }
