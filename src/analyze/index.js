@@ -1,0 +1,77 @@
+'use strict';
+
+const { parseFrontendSrc } = require('./frontend-parser');
+const { extractRoutes } = require('./route-extractor');
+const { createHttpClient, getAdapter } = require('./backend-fetcher');
+const { buildGraph } = require('./graph-builder');
+const { saveGraph } = require('../cache');
+
+async function runAnalyze(config, opts = {}) {
+  const spinner = createSpinner();
+
+  // 1. Parse frontend source
+  spinner.start('Parsing frontend source files...');
+  const apiCalls = parseFrontendSrc(config.frontendSrc);
+  const frontendRoutes = extractRoutes(config.routerFile, config.frontendSrc);
+  spinner.succeed(`Frontend: ${frontendRoutes.size} routes, ${apiCalls.allCalls.length} API calls found`);
+
+  // 2. Fetch backend spec (or headless)
+  let backendSpec;
+  if (opts.headless) {
+    spinner.start('Headless mode — skipping OpenAPI fetch...');
+    backendSpec = { routes: {}, featureFlags: {}, headless: true, specUrl: null, framework: config.framework };
+    spinner.succeed('Headless mode — will probe frontend-discovered URLs only');
+  } else {
+    spinner.start(`Fetching backend spec from ${config.baseUrl}${config.openApiUrl}...`);
+    const http = createHttpClient(config);
+    const adapter = getAdapter(config.framework);
+    try {
+      backendSpec = await adapter.fetchSpec(config, http);
+      if (backendSpec.headless) {
+        spinner.warn(`OpenAPI unavailable — running in headless mode`);
+      } else {
+        const routeCount = Object.keys(backendSpec.routes).length;
+        const flagCount = Object.keys(backendSpec.featureFlags).length;
+        spinner.succeed(`Backend: ${routeCount} routes, ${flagCount} feature flags`);
+      }
+    } catch (err) {
+      spinner.fail(`Backend fetch failed: ${err.message}`);
+      throw err;
+    }
+  }
+
+  // 3. Build dependency graph
+  spinner.start('Building dependency graph...');
+  const graph = buildGraph({ frontendRoutes, apiCalls, backendSpec, config });
+  spinner.succeed('Dependency graph built');
+
+  // 4. Save graph
+  spinner.start('Saving graph...');
+  await saveGraph(graph, config);
+  spinner.succeed(`Graph saved → ${config.output.dir}/graph.json`);
+
+  return graph;
+}
+
+function createSpinner() {
+  // Use ora if available, else plain console
+  try {
+    const ora = require('ora');
+    const s = ora({ spinner: 'dots' });
+    return {
+      start: (msg) => s.start(msg),
+      succeed: (msg) => s.succeed(msg),
+      fail: (msg) => s.fail(msg),
+      warn: (msg) => s.warn(msg),
+    };
+  } catch {
+    return {
+      start: (msg) => process.stdout.write(`  ... ${msg}\n`),
+      succeed: (msg) => process.stdout.write(`  ✓ ${msg}\n`),
+      fail: (msg) => process.stderr.write(`  ✗ ${msg}\n`),
+      warn: (msg) => process.stdout.write(`  ⚠ ${msg}\n`),
+    };
+  }
+}
+
+module.exports = { runAnalyze };
