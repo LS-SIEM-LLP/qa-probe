@@ -15,8 +15,9 @@ module.exports = {
     type: 'bearer',
     loginUrl: '/api/auth/login',
     credentials: {
-      username: process.env.QA_USER || 'test@example.com',
-      password: process.env.QA_PASS || 'testpassword',
+      // Set QA_USER / QA_PASS in your environment or CI secrets.
+      username: process.env.QA_USER,
+      password: process.env.QA_PASS,
     },
     tokenPath: 'token',
   },

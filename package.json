@@ -2,12 +2,12 @@
   "name": "qa-probe",
   "version": "1.0.0",
   "description": "Local QA agent — maps frontend routes to backend API calls, probes every endpoint live, scores pages 0–100, explains why data is missing. Works with any FastAPI/Express/Next.js app.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "commonjs",
   "engines": { "node": ">=18.0.0" },
   "bin": { "qa-probe": "./bin/qa-probe.js" },
   "main": "./src/index.js",
-  "files": ["bin/", "src/", "examples/", "README.md"],
+  "files": ["bin/", "src/", "examples/", "README.md", "LICENSE", "CHANGELOG.md"],
   "scripts": {
     "start": "node bin/qa-probe.js",
     "test": "node --test src/**/*.test.js"
@@ -25,9 +25,16 @@
     "ws": "^8.16.0",
     "zod": "^3.22.0"
   },
-  "keywords": ["qa", "api-testing", "openapi", "fastapi", "playwright", "siem", "mcp", "devtools"],
+  "keywords": [
+    "qa", "api-testing", "openapi", "fastapi", "express", "nextjs",
+    "frontend", "ast", "mcp", "devtools", "root-cause", "smoke-testing"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/qa-probe"
-  }
+    "url": "https://github.com/kinghtfall/LS-QA-Probe"
+  },
+  "bugs": {
+    "url": "https://github.com/kinghtfall/LS-QA-Probe/issues"
+  },
+  "homepage": "https://github.com/kinghtfall/LS-QA-Probe#readme"
 }

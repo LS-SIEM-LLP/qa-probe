@@ -20,8 +20,10 @@ module.exports = {
     type: 'bearer',
     loginUrl: '/auth/login',
     credentials: {
-      username: process.env.QA_PROBE_USER || 'smoke_qa',
-      password: process.env.QA_PROBE_PASS || 'SmokeQA_2026!',
+      // Set QA_PROBE_USER / QA_PROBE_PASS in your environment or CI secrets.
+      // Never commit real credentials to source control.
+      username: process.env.QA_PROBE_USER,
+      password: process.env.QA_PROBE_PASS,
     },
     tokenPath: 'access_token',
   },

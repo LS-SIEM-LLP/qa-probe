@@ -87,7 +87,7 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
     return {
       rootCause: 'server_error',
       rootCauseDetail: `${endpointKey} → ${status}. Backend returned a server error.`,
-      fixHint: 'Check backend logs for a traceback. Run: docker logs ls-api --tail 50',
+      fixHint: 'Check backend logs for a traceback (e.g. `docker logs <api-container> --tail 50`).',
     };
   }
 
@@ -159,34 +159,20 @@ function findFeatureFlag(endpointKey, graph) {
 }
 
 function getFlagName(endpointKey, graph) {
-  // Try to infer HAS_* flag name from path prefix
+  // Derive a probable HAS_* flag name from the path prefix using the
+  // standard convention: /some-feature → HAS_SOME_FEATURE.
+  // Projects can override this by adding a featureFlagMap to their config.
   const path = endpointKey.split(' ').slice(1).join(' ');
-  const prefix = '/' + path.split('/').filter(Boolean)[0];
-  // Map common prefixes to flag names (same as backend convention)
-  const flagMap = {
-    '/malware-detection': 'HAS_MALWARE_DETECTION',
-    '/dns': 'HAS_DNS_C2_ROUTER',
-    '/hive-mind': 'HAS_HIVE_MIND',
-    '/siem-health': 'HAS_SIEM_HEALTH',
-    '/ai-analytics': 'HAS_AI_ANALYTICS_ROUTER',
-    '/memory-monitor': 'HAS_MEMORY_MONITOR',
-    '/cross-tool': 'HAS_CROSS_TOOL',
-    '/incident-forensics': 'HAS_INCIDENT_FORENSICS',
-    '/mcp-security': 'HAS_MCP_SECURITY',
-    '/self-training': 'HAS_SELF_TRAINING',
-    '/ai-tool-ueba': 'HAS_AI_TOOL_UEBA',
-    '/credential-scanner': 'HAS_DEFAULT_CRED_SCANNER',
-    '/ddos': 'HAS_DDOS',
-    '/yara': 'HAS_YARA',
-    '/nta': 'HAS_NTA',
-    '/email-security': 'HAS_EMAIL_SECURITY',
-    '/rogue-device': 'HAS_ROGUE_DEVICE',
-    '/ot-security': 'HAS_OT_SECURITY',
-    '/ueba': 'HAS_UEBA',
-    '/entity-risk': 'HAS_ENTITY_RISK_ROUTER',
-    '/privilege-detection': 'HAS_PRIVILEGE_DETECTION',
-  };
-  return flagMap[prefix] || null;
+  const segment = path.split('/').filter(Boolean)[0];
+  if (!segment) return null;
+
+  // Check config-provided override map first (config.featureFlagMap)
+  const configMap = (graph && graph.config && graph.config.featureFlagMap) || {};
+  const prefix = '/' + segment;
+  if (configMap[prefix]) return configMap[prefix];
+
+  // Auto-derive: /some-feature-name → HAS_SOME_FEATURE_NAME
+  return 'HAS_' + segment.toUpperCase().replace(/-/g, '_');
 }
 
 function isInBackendSpec(endpointKey, graph) {

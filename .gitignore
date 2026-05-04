@@ -1,3 +1,27 @@
+# Dependencies
 node_modules/
+
+# qa-probe cache and output — never commit these
 .qaprobe/
+
+# Project-level config (lives at the repo root, not here)
+qa-probe.config.js
+
+# Environment / secrets
+.env
+.env.*
+*.env
+
+# Logs
 *.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
