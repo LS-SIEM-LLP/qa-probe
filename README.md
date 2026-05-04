@@ -7,17 +7,17 @@ Overall score: 74/100
 
 Root causes:
   empty_db:              5 route(s)   → seed the database
-  feature_flag_disabled: 3 route(s)   → enable HAS_NTA, HAS_DNS_C2_ROUTER, HAS_YARA
-  missing_route:         1 route(s)   → fix trailing slash in /api/alerts/
+  feature_flag_disabled: 3 route(s)   → enable HAS_BILLING, HAS_REPORTS, HAS_ANALYTICS
+  missing_route:         1 route(s)   → fix trailing slash in /api/users/
 
 ┌──────────────────────────────┬────────┬────────────┬──────────────────────────┐
 │ Route                        │ Score  │ Status     │ Root Cause               │
 ├──────────────────────────────┼────────┼────────────┼──────────────────────────┤
-│ /rules                       │ 100    │ ✓ healthy  │                          │
-│ /alerts                      │ 80     │ ✓ healthy  │ empty db                 │
-│ /nta                         │  0     │ ✗ broken   │ feature flag disabled    │
-│ /feedback-coordinator        │ 50     │ ⚠ degraded │ empty db                 │
-│ /malware-detection           │ 85     │ ✓ healthy  │                          │
+│ /dashboard                   │ 100    │ ✓ healthy  │                          │
+│ /users                       │ 80     │ ✓ healthy  │ empty db                 │
+│ /billing                     │  0     │ ✗ broken   │ feature flag disabled    │
+│ /reports                     │ 50     │ ⚠ degraded │ empty db                 │
+│ /settings                    │ 85     │ ✓ healthy  │                          │
 └──────────────────────────────┴────────┴────────────┴──────────────────────────┘
 ```
 
@@ -29,7 +29,7 @@ Your dashboard loads. The page doesn't crash. But every table is empty, every ch
 
 The root cause is usually one of:
 - The frontend calls `/api/auth/login` but the backend route is `/api/login`
-- A feature flag (`HAS_MALWARE_DETECTION=false`) silently disables an entire router
+- A feature flag (`HAS_BILLING=false`) silently disables an entire router
 - The database is correctly connected but the table has no rows
 - An OpenAPI response model was refactored — `rule_name` became `name` — and the frontend component still reads the old field
 
@@ -104,7 +104,7 @@ Output: `.qaprobe/graph.json`
 
 Authenticates once, then fires concurrent HTTP requests at every discovered endpoint.
 
-- **Auth modes**: bearer token (two-step with cookie fallback), API key, none
+- **Auth modes**: bearer token, cookie session, API key, none
 - **HTTP probing**: configurable concurrency, timeout, per-request delay
 - **Self-signed TLS**: `ignoreHTTPSErrors: true` for local/staging stacks
 - **SSE verification**: opens the event stream, waits for the first event within `firstEventTimeoutMs`
@@ -268,7 +268,8 @@ module.exports = {
   // ── Auth ────────────────────────────────────────────────────────────────────
   auth: {
     type: 'bearer',
-    // 'bearer'  — POST loginUrl with credentials, extract token from response body or cookie
+    // 'bearer'  — POST loginUrl with credentials, extract token from response body
+    // 'cookie'  — POST loginUrl, server sets an HttpOnly session cookie that's reused on every probe
     // 'api-key' — send a static key header on every request (no login call)
     // 'none'    — no authentication (public API)
 
@@ -284,7 +285,7 @@ module.exports = {
     tokenPath: 'access_token',
     // JSON path in the login response body containing the bearer token.
     // If null or not found, qa-probe falls back to checking Set-Cookie headers
-    // for common cookie names: ls_access, access_token, jwt, auth_token, token.
+    // for common cookie names: access_token, jwt, auth_token, token, session.
 
     apiKey: process.env.QA_API_KEY,
     // Used when type is 'api-key'.
@@ -368,6 +369,16 @@ module.exports = {
     // 'ai-context' is a compact summary optimized for LLM context windows.
   },
 
+  // ── Optional: empty_db fix hint ───────────────────────────────────────────
+  // seedCommand: 'npm run db:seed',
+  // Shell command shown verbatim in the empty_db root cause's fix hint.
+  // When omitted, qa-probe shows a generic "run your seed/fixture script" message.
+
+  // ── Optional: feature flag name overrides ─────────────────────────────────
+  // featureFlagMap: { '/billing': 'HAS_BILLING_V2' },
+  // Maps a path prefix to a custom HAS_* flag name. By default qa-probe
+  // auto-derives `/some-feature` → `HAS_SOME_FEATURE`. Use this only when your
+  // backend's flag name doesn't follow that convention.
 };
 ```
 
@@ -378,9 +389,14 @@ module.exports = {
 auth: { type: 'bearer', loginUrl: '/auth/token', credentials: { username: process.env.QA_USER, password: process.env.QA_PASS }, tokenPath: 'access_token' }
 ```
 
-**Cookie-mode JWT** (token returned in `Set-Cookie`, not body)
+**Cookie session** (server sets HttpOnly session cookie on login; reused on every probe)
 ```js
-// No changes needed — qa-probe auto-detects cookie-mode when access_token is null in the response body
+auth: { type: 'cookie', loginUrl: '/auth/login', credentials: { username: process.env.QA_USER, password: process.env.QA_PASS }, cookieName: 'session' }
+```
+
+**Cookie-mode JWT** (token returned in `Set-Cookie` instead of body — use `bearer` mode)
+```js
+// qa-probe falls back to Set-Cookie when access_token is missing from the response body
 auth: { type: 'bearer', loginUrl: '/auth/login', credentials: { username: process.env.QA_USER, password: process.env.QA_PASS }, tokenPath: 'access_token' }
 ```
 
@@ -491,9 +507,9 @@ Expected response format from `featureStatusUrl`:
 {
   "count": 3,
   "routers": {
-    "/malware-detection": { "included": false, "enabled": false, "message": "HAS_MALWARE_DETECTION=false" },
-    "/alerts":            { "included": true,  "enabled": true  },
-    "/nta":               { "included": false, "enabled": false, "message": "HAS_NTA=false" }
+    "/billing":   { "included": false, "enabled": false, "message": "HAS_BILLING=false" },
+    "/users":     { "included": true,  "enabled": true  },
+    "/analytics": { "included": false, "enabled": false, "message": "HAS_ANALYTICS=false" }
   }
 }
 ```

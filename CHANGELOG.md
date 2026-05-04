@@ -75,7 +75,7 @@ Initial public release under Apache 2.0.
 - Environment variable support for credentials (`QA_USER`, `QA_PASS`, `QA_API_KEY`)
 
 **Examples**
-- `examples/lightshield-siem/` — fully annotated FastAPI + React example
+- `examples/fastapi-react/` — fully annotated FastAPI + React example
 - `examples/express-app/` — Express + React minimal example
 
 ---

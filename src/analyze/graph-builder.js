@@ -250,7 +250,7 @@ function findFeatureFlag(routePath, featureFlags) {
   // Direct match
   if (featureFlags[routePath]) return featureFlags[routePath];
 
-  // Prefix match: /malware-detection → featureFlags["/malware-detection"]
+  // Prefix match: /billing/invoices → featureFlags["/billing"]
   for (const [prefix, flag] of Object.entries(featureFlags)) {
     if (routePath === prefix || routePath.startsWith(prefix + '/')) {
       return flag;

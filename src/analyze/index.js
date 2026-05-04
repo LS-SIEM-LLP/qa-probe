@@ -11,9 +11,15 @@ async function runAnalyze(config, opts = {}) {
 
   // 1. Parse frontend source
   spinner.start('Parsing frontend source files...');
-  const apiCalls = parseFrontendSrc(config.frontendSrc);
+  const apiCalls = parseFrontendSrc(config.frontendSrc, {
+    apiClientFile: config.apiClientFile,
+  });
   const frontendRoutes = extractRoutes(config.routerFile, config.frontendSrc);
-  spinner.succeed(`Frontend: ${frontendRoutes.size} routes, ${apiCalls.allCalls.length} API calls found`);
+  const discoveredClients = (apiCalls.clientNames || []).filter(
+    n => !['api', 'apiClient', 'axios', 'client', 'http', 'axiosInstance', 'instance', 'httpClient', 'request', 'fetcher', 'apiV1', 'apiV2'].includes(n)
+  );
+  const clientNote = discoveredClients.length > 0 ? ` (auto-detected clients: ${discoveredClients.join(', ')})` : '';
+  spinner.succeed(`Frontend: ${frontendRoutes.size} routes, ${apiCalls.allCalls.length} API calls found${clientNote}`);
 
   // 2. Fetch backend spec (or headless)
   let backendSpec;

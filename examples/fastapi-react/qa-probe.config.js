@@ -1,13 +1,17 @@
-// qa-probe config for LightShield-SIEM
-// Run from the repo root: node qa-probe/bin/qa-probe.js run --config qa-probe.config.js
+// qa-probe config for a typical FastAPI + React app
+// Run from the repo root: npx qa-probe run --config qa-probe.config.js
 
 module.exports = {
   // ── Target ────────────────────────────────────────────────────────────────
-  // Backend API — nginx strips /api and proxies to FastAPI on port 8000
+  // Backend API base URL. If you proxy through nginx and strip a prefix,
+  // set frontendApiPrefix to that prefix so frontend `/api/...` calls map
+  // correctly to backend routes.
   baseUrl: 'http://localhost:8000',
   frontendApiPrefix: '/api',
   framework: 'fastapi',
   openApiUrl: '/openapi.json',
+  // FastAPI-specific: a /health/features endpoint listing HAS_* router flags.
+  // Set to null if you don't expose one — feature_flag_disabled detection is skipped.
   featureStatusUrl: '/health/features',
 
   // ── Frontend Source ────────────────────────────────────────────────────────
@@ -33,34 +37,32 @@ module.exports = {
     concurrency: 5,
     delayMs: 50,
     timeoutMs: 10000,
-    // LightShield uses self-signed TLS — must be true for HTTPS mode
-    ignoreHTTPSErrors: true,
+    // Set true if your dev/staging API uses a self-signed TLS cert.
+    ignoreHTTPSErrors: false,
     skipPaths: ['^/auth/', '^/health', '^/openapi', '^/docs', '^/redoc'],
-    // POST endpoints that are safe reads (search/query, not writes)
+    // POST endpoints that are safe reads (search/query, not writes).
+    // Everything else with method != GET is skipped to avoid mutating data.
     safePosts: [
-      '/query/workbench',
-      '/logs/search',
-      '/alerts/search',
+      '/search',
+      '/query',
     ],
     pathParamValues: {
       id: '1',
-      rule_name: 'test-rule',
-      case_id: '1',
       user_id: '1',
     },
     sse: {
       enabled: true,
       firstEventTimeoutMs: 5000,
-      paths: ['/alerts/live', '/ws/alerts'],
+      paths: [],  // e.g. ['/events/stream']
     },
     ws: {
       enabled: true,
       firstFrameTimeoutMs: 5000,
-      paths: ['/ws'],
+      paths: [],  // e.g. ['/ws']
     },
   },
 
-  // ── Scoring Weights ───────────────────────────────────────────────────────
+  // ── Scoring Weights (negative = penalty applied to a route's 0-100 score) ─
   scoring: {
     missingRoute: -50,
     emptyResponse: -20,
@@ -78,4 +80,16 @@ module.exports = {
     keepHistory: 10,
     formats: ['json', 'markdown', 'ai-context'],
   },
+
+  // Optional: shell command to seed your test database.
+  // Shown in empty_db fix hints. Examples:
+  //   'docker exec api python scripts/seed.py'
+  //   'npm run db:seed'
+  //   'make seed'
+  // seedCommand: 'npm run db:seed',
+
+  // Optional: override auto-derived feature flag names.
+  // By default `/some-feature` → `HAS_SOME_FEATURE`. Use this when your
+  // backend's flag name doesn't follow that convention.
+  // featureFlagMap: { '/billing': 'HAS_BILLING_V2' },
 };

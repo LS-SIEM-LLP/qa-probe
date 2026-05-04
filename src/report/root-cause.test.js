@@ -53,32 +53,32 @@ describe('not_probed', () => {
 describe('feature_flag_disabled', () => {
   const flagGraph = graph({
     featureFlags: {
-      '/nta': { included: false, enabled: false, message: 'HAS_NTA=false' },
+      '/billing': { included: false, enabled: false, message: 'HAS_BILLING=false' },
     },
   });
 
   test('404 at <15ms with disabled flag → feature_flag_disabled', () => {
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 5 }), flagGraph, cfg);
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 5 }), flagGraph, cfg);
     assert.equal(result.rootCause, 'feature_flag_disabled');
     assert.ok(result.rootCauseDetail.includes('404 at 5ms'));
-    assert.ok(result.fixHint.includes('HAS_NTA'));
+    assert.ok(result.fixHint.includes('HAS_BILLING'));
   });
 
   test('fix hint includes the auto-derived flag name', () => {
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 3 }), flagGraph, cfg);
-    assert.ok(result.fixHint.includes('HAS_NTA=true'));
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 3 }), flagGraph, cfg);
+    assert.ok(result.fixHint.includes('HAS_BILLING=true'));
   });
 
   test('404 at >=15ms with disabled flag → NOT feature_flag_disabled (falls to missing_route)', () => {
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 20 }), flagGraph, cfg);
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 20 }), flagGraph, cfg);
     assert.notEqual(result.rootCause, 'feature_flag_disabled');
   });
 
   test('404 at <15ms with flag ENABLED → NOT feature_flag_disabled', () => {
     const enabledGraph = graph({
-      featureFlags: { '/nta': { included: true, enabled: true } },
+      featureFlags: { '/billing': { included: true, enabled: true } },
     });
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 5 }), enabledGraph, cfg);
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 5 }), enabledGraph, cfg);
     assert.notEqual(result.rootCause, 'feature_flag_disabled');
   });
 
@@ -88,9 +88,9 @@ describe('feature_flag_disabled', () => {
   });
 
   test('flag prefix matching works for sub-paths', () => {
-    // /nta flag covers /nta/flows, /nta/anomalies, etc.
+    // /billing flag covers /billing/invoices, /billing/refunds, etc.
     const result = classifyEndpoint(
-      'GET /nta/anomalies/detail',
+      'GET /billing/invoices/detail',
       probe({ status: 404, ms: 8 }),
       flagGraph,
       cfg,
@@ -166,10 +166,10 @@ describe('missing_route', () => {
 
   test('slow 404 (>= 15ms) for a disabled-flag path → missing_route (not feature_flag_disabled)', () => {
     const flagGraph = graph({
-      featureFlags: { '/nta': { included: false, enabled: false } },
+      featureFlags: { '/billing': { included: false, enabled: false } },
     });
     // Slow 404 — the timing heuristic rules out flag disabled
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 100 }), flagGraph, cfg);
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 100 }), flagGraph, cfg);
     assert.equal(result.rootCause, 'missing_route');
   });
 });
@@ -483,11 +483,11 @@ describe('unknown', () => {
 describe('priority ordering', () => {
   test('feature_flag_disabled beats missing_route for fast flagged 404', () => {
     const g = graph({
-      featureFlags: { '/nta': { included: false, enabled: false } },
+      featureFlags: { '/billing': { included: false, enabled: false } },
       // Route is also absent from spec — would be missing_route without flag
       backendRoutes: {},
     });
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 5 }), g, cfg);
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 5 }), g, cfg);
     assert.equal(result.rootCause, 'feature_flag_disabled');
   });
 
@@ -522,9 +522,9 @@ describe('priority ordering', () => {
 
   test('feature_flag_disabled does NOT fire for fast 404 when flag is enabled', () => {
     const g = graph({
-      featureFlags: { '/nta': { included: true, enabled: true } },
+      featureFlags: { '/billing': { included: true, enabled: true } },
     });
-    const result = classifyEndpoint('GET /nta/flows', probe({ status: 404, ms: 3 }), g, cfg);
+    const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 3 }), g, cfg);
     assert.notEqual(result.rootCause, 'feature_flag_disabled');
   });
 });
@@ -541,16 +541,16 @@ describe('getFlagName (via feature_flag_disabled hint)', () => {
     return classifyEndpoint(`GET ${path}`, probe({ status: 404, ms: 5 }), g, cfg);
   }
 
-  test('/malware-detection → HAS_MALWARE_DETECTION', () => {
-    assert.ok(flagResult('/malware-detection/scan').fixHint.includes('HAS_MALWARE_DETECTION'));
+  test('/analytics → HAS_ANALYTICS', () => {
+    assert.ok(flagResult('/analytics/dashboards').fixHint.includes('HAS_ANALYTICS'));
   });
 
-  test('/dns → HAS_DNS', () => {
-    assert.ok(flagResult('/dns/queries').fixHint.includes('HAS_DNS'));
+  test('/dns → HAS_REPORTS', () => {
+    assert.ok(flagResult('/reports/exports').fixHint.includes('HAS_REPORTS'));
   });
 
-  test('/ai-tool-ueba → HAS_AI_TOOL_UEBA (hyphens become underscores)', () => {
-    assert.ok(flagResult('/ai-tool-ueba/events').fixHint.includes('HAS_AI_TOOL_UEBA'));
+  test('/ai-tool-ueba → HAS_USER_ACTIVITY (hyphens become underscores)', () => {
+    assert.ok(flagResult('/user-activity/events').fixHint.includes('HAS_USER_ACTIVITY'));
   });
 });
 
@@ -562,11 +562,11 @@ describe('clusterRootCauses', () => {
   test('5+ endpoints under same prefix with same cause form a cluster', () => {
     const results = {};
     for (let i = 0; i < 6; i++) {
-      results[`GET /malware-detection/endpoint-${i}`] = { rootCause: 'missing_route' };
+      results[`GET /analytics/endpoint-${i}`] = { rootCause: 'missing_route' };
     }
     const clusters = clusterRootCauses(results);
     assert.equal(clusters.length, 1);
-    assert.equal(clusters[0].prefix, '/malware-detection');
+    assert.equal(clusters[0].prefix, '/analytics');
     assert.equal(clusters[0].rootCause, 'missing_route');
     assert.equal(clusters[0].count, 6);
   });
@@ -574,7 +574,7 @@ describe('clusterRootCauses', () => {
   test('fewer than 5 endpoints under a prefix do not cluster', () => {
     const results = {};
     for (let i = 0; i < 4; i++) {
-      results[`GET /malware-detection/endpoint-${i}`] = { rootCause: 'missing_route' };
+      results[`GET /analytics/endpoint-${i}`] = { rootCause: 'missing_route' };
     }
     const clusters = clusterRootCauses(results);
     assert.equal(clusters.length, 0);

@@ -82,7 +82,7 @@ function parseFeatureFlags(featuresData) {
 
   const flags = {};
 
-  // LightShield-SIEM returns: { "count": N, "routers": { "/prefix": { "included", "enabled", "message" } } }
+  // Expected shape: { "count": N, "routers": { "/prefix": { "included", "enabled", "message" } } }
   // Generic fallback: { "features": { ... } } or the object itself
   const source = featuresData.routers || featuresData.features || featuresData;
 
@@ -181,12 +181,12 @@ function extractToken(loginResponse, config) {
       return { Authorization: `Bearer ${token}` };
     }
 
-    // Fallback: cookie-mode login (e.g. LightShield returns ls_access cookie with JWT)
+    // Fallback: cookie-mode login (some apps return the JWT in a Set-Cookie header)
     const setCookies = loginResponse.headers && loginResponse.headers['set-cookie'];
     if (setCookies) {
       const cookies = Array.isArray(setCookies) ? setCookies : [setCookies];
       // Find the access token cookie — try common names
-      const ACCESS_COOKIE_NAMES = ['ls_access', 'access_token', 'jwt', 'auth_token', 'token'];
+      const ACCESS_COOKIE_NAMES = ['access_token', 'jwt', 'auth_token', 'token', 'session'];
       for (const cookieStr of cookies) {
         const [nameVal] = cookieStr.split(';');
         const [name, val] = nameVal.split('=');

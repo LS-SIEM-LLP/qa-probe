@@ -73,6 +73,13 @@ function getExpressionName(node) {
   return 'param';
 }
 
+// Default seed list — common conventions. Augmented per-project by scanning
+// for `const X = axios.create(...)` and imports from the configured apiClientFile.
+const DEFAULT_API_CLIENTS = new Set([
+  'api', 'apiClient', 'axios', 'client', 'http', 'axiosInstance', 'instance',
+  'httpClient', 'request', 'fetcher', 'apiV1', 'apiV2',
+]);
+
 /**
  * Detect if this call expression is an API call.
  * Patterns:
@@ -80,8 +87,11 @@ function getExpressionName(node) {
  *   api.post('/path', data)
  *   axios.get('/path')
  *   apiClient.delete('/path')
+ *
+ * `clientNames` is a Set of identifier names recognised as API clients in the
+ * current project (defaults + auto-discovered from axios.create assignments).
  */
-function detectDirectApiCall(node) {
+function detectDirectApiCall(node, clientNames) {
   if (node.type !== 'CallExpression') return null;
   const { callee, arguments: args } = node;
 
@@ -94,9 +104,7 @@ function detectDirectApiCall(node) {
     args.length > 0
   ) {
     const objName = callee.object.type === 'Identifier' ? callee.object.name : null;
-    // Only match known API client names
-    const API_CLIENTS = ['api', 'apiClient', 'axios', 'client', 'http', 'axiosInstance', 'instance'];
-    if (objName && API_CLIENTS.includes(objName)) {
+    if (objName && clientNames.has(objName)) {
       const pathVal = extractStringValue(args[0]);
       if (pathVal && pathVal.startsWith('/')) {
         return { method: callee.property.name.toUpperCase(), path: pathVal };
@@ -104,6 +112,52 @@ function detectDirectApiCall(node) {
     }
   }
   return null;
+}
+
+/**
+ * Discover project-specific API client variable names by scanning for
+ *   const X = axios.create(...)
+ *   export const X = axios.create(...)
+ * across the source tree. Returns a Set of names to merge with DEFAULT_API_CLIENTS.
+ *
+ * Also picks up the default-export name from the configured apiClientFile
+ * and the names of imports that resolve to that file.
+ */
+function discoverApiClientNames(srcDir, apiClientFile) {
+  const names = new Set();
+  const files = walkDir(srcDir, /\.(j|t)sx?$/);
+
+  for (const file of files) {
+    let src;
+    try { src = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    if (!src.includes('axios.create') && !src.includes('createApi')) continue;
+
+    let ast;
+    try { ast = parse(src, PARSE_OPTS); } catch { continue; }
+
+    traverse(ast, {
+      VariableDeclarator(p) {
+        const init = p.node.init;
+        if (!init || init.type !== 'CallExpression') return;
+        const callee = init.callee;
+        // axios.create(...) or createApi(...) or createClient(...)
+        const isAxiosCreate =
+          callee.type === 'MemberExpression' &&
+          callee.object.type === 'Identifier' &&
+          callee.object.name === 'axios' &&
+          callee.property.type === 'Identifier' &&
+          callee.property.name === 'create';
+        const isFactory =
+          callee.type === 'Identifier' &&
+          /^(createApi|createClient|createHttpClient)$/i.test(callee.name);
+        if ((isAxiosCreate || isFactory) && p.node.id.type === 'Identifier') {
+          names.add(p.node.id.name);
+        }
+      },
+    });
+  }
+
+  return names;
 }
 
 /**
@@ -160,6 +214,7 @@ function parseFile(filePath, options = {}) {
   const src = fs.readFileSync(filePath, 'utf8');
   const results = [];
   const seenPaths = new Set();
+  const clientNames = options.clientNames || DEFAULT_API_CLIENTS;
 
   let ast;
   try {
@@ -177,7 +232,11 @@ function parseFile(filePath, options = {}) {
     CallExpression(nodePath) {
       const node = nodePath.node;
 
-      for (const detector of [detectDirectApiCall, detectUseApiData, detectUseApiQuery]) {
+      for (const detector of [
+        (n) => detectDirectApiCall(n, clientNames),
+        detectUseApiData,
+        detectUseApiQuery,
+      ]) {
         const hit = detector(node);
         if (hit) {
           const normalized = normalizePath(hit.path);
@@ -208,20 +267,30 @@ function parseFile(filePath, options = {}) {
  * Scan all .js, .jsx, .ts, .tsx files under srcDir and return every API call found.
  * Returns: Map<file, [{ method, path, rawPath, callSite }]>
  */
-function parseFrontendSrc(srcDir) {
+function parseFrontendSrc(srcDir, options = {}) {
   const allFiles = walkDir(srcDir, /\.(j|t)sx?$/);
   const byFile = new Map();
   const allCalls = [];
 
+  // Pre-pass: discover project-specific API client variable names by scanning
+  // for axios.create() / createApi() / createClient() factory calls. This means
+  // codebases that name their client `apiV2` or `siteApi` get detected without
+  // the user having to configure anything.
+  const discovered = discoverApiClientNames(srcDir, options.apiClientFile);
+  const clientNames = new Set([...DEFAULT_API_CLIENTS, ...discovered]);
+
   for (const file of allFiles) {
-    const calls = parseFile(file, { relBase: path.resolve(srcDir, '..', '..') });
+    const calls = parseFile(file, {
+      relBase: path.resolve(srcDir, '..', '..'),
+      clientNames,
+    });
     if (calls.length > 0) {
       byFile.set(file, calls);
       allCalls.push(...calls);
     }
   }
 
-  return { byFile, allCalls };
+  return { byFile, allCalls, clientNames: [...clientNames] };
 }
 
 function walkDir(dir, ext) {
@@ -247,4 +316,10 @@ function walkDir(dir, ext) {
   return results;
 }
 
-module.exports = { parseFrontendSrc, parseFile, normalizePath };
+module.exports = {
+  parseFrontendSrc,
+  parseFile,
+  normalizePath,
+  discoverApiClientNames,
+  DEFAULT_API_CLIENTS,
+};
