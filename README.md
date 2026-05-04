@@ -1,11 +1,11 @@
 # qa-probe
 
-**Map every frontend route to every backend API call. Probe them live. Get a root-cause diagnosis — not just a status code.**
+**Find out exactly why your pages are blank — in under 5 minutes.**
 
 ```
 Overall score: 74/100
 
-Root causes:
+Root causes detected:
   empty_db:              5 route(s)   → seed the database
   feature_flag_disabled: 3 route(s)   → enable HAS_BILLING, HAS_REPORTS, HAS_ANALYTICS
   missing_route:         1 route(s)   → fix trailing slash in /api/users/
@@ -14,52 +14,64 @@ Root causes:
 │ Route                        │ Score  │ Status     │ Root Cause               │
 ├──────────────────────────────┼────────┼────────────┼──────────────────────────┤
 │ /dashboard                   │ 100    │ ✓ healthy  │                          │
-│ /users                       │ 80     │ ✓ healthy  │ empty db                 │
-│ /billing                     │  0     │ ✗ broken   │ feature flag disabled    │
-│ /reports                     │ 50     │ ⚠ degraded │ empty db                 │
-│ /settings                    │ 85     │ ✓ healthy  │                          │
+│ /users                       │  80    │ ✓ healthy  │ empty db                 │
+│ /billing                     │   0    │ ✗ broken   │ feature flag disabled    │
+│ /reports                     │  50    │ ⚠ degraded │ empty db                 │
+│ /settings                    │  85    │ ✓ healthy  │                          │
 └──────────────────────────────┴────────┴────────────┴──────────────────────────┘
 ```
 
----
-
-## The problem this solves
-
-Your dashboard loads. The page doesn't crash. But every table is empty, every chart shows zero, and you have no idea why.
-
-The root cause is usually one of:
-- The frontend calls `/api/auth/login` but the backend route is `/api/login`
-- A feature flag (`HAS_BILLING=false`) silently disables an entire router
-- The database is correctly connected but the table has no rows
-- An OpenAPI response model was refactored — `rule_name` became `name` — and the frontend component still reads the old field
-
-Playwright catches crashes. Schemathesis validates contracts. **Neither tells you which frontend page is broken because of which backend endpoint, or why.** qa-probe does.
-
-It walks your React source code with a Babel AST parser — the same parser VS Code uses — extracts every API call across every component, maps them to your backend's OpenAPI spec, probes them live with real auth, and produces a scored report with a specific fix for every failure.
+qa-probe is a Node.js CLI that maps your React frontend routes to your backend API endpoints, probes every one live with real auth, and gives you a specific root-cause diagnosis — not just a status code. Works with FastAPI, Express, any OpenAPI backend.
 
 ---
 
-## Quickstart
+## The problem it solves
+
+Your dashboard loads. No crash. But every table is empty, every chart shows zero, and you have no idea why.
+
+The cause is almost always one of:
+- The frontend calls `/api/users/` but the backend route is `/api/users` (trailing slash)
+- A feature flag (`HAS_BILLING=false`) silently disabled an entire router
+- The database is connected but the table has no rows
+- A backend refactor renamed `user_name` → `name` and the frontend component still reads the old field
+
+Playwright and Schemathesis won't catch this. **qa-probe will — automatically, from your source code.**
+
+---
+
+## Choose your path
+
+| I want to… | Go to |
+|---|---|
+| Run it from the terminal and read the report myself | [Manual setup (5 min)](#manual-setup-5-min) |
+| Ask Claude / Cursor questions about my broken pages | [AI / MCP setup](#ai--mcp-setup) |
+| Use it in CI to block broken deploys | [CI / GitHub Actions](#ci--github-actions) |
+
+---
+
+## Manual setup (5 min)
+
+### Step 1 — Install
 
 ```bash
-# Run without installing
+# Use without installing (recommended for first try)
 npx qa-probe run
 
 # Or install globally
 npm install -g qa-probe
-qa-probe run
-
-# Point at your config
-qa-probe run --config ./qa-probe.config.js
 ```
 
-**Minimum config** (`qa-probe.config.js` at your project root):
+### Step 2 — Create your config
+
+Create `qa-probe.config.js` at your project root:
 
 ```js
+// qa-probe.config.js
 module.exports = {
-  baseUrl: 'http://localhost:8000',
-  frontendSrc: './frontend/src',
-  routerFile: './frontend/src/App.tsx',
+  baseUrl: 'http://localhost:8000',     // your backend URL
+  frontendSrc: './frontend/src',         // where your React files live
+  routerFile: './frontend/src/App.tsx',  // your main router file
+
   auth: {
     type: 'bearer',
     loginUrl: '/auth/login',
@@ -72,106 +84,85 @@ module.exports = {
 };
 ```
 
+> **Tip:** `qa-probe.config.js` is gitignored automatically. Never hardcode credentials — always use environment variables.
+
+### Step 3 — Start your app, then run qa-probe
+
 ```bash
-QA_USER=testuser QA_PASS=testpass qa-probe run
+# Make sure your backend is running first, then:
+QA_USER=testuser QA_PASS=testpass npx qa-probe run
 ```
 
----
+That's it. qa-probe will:
+1. Parse your React source and find every API call
+2. Fetch your OpenAPI spec from `/openapi.json`
+3. Probe every endpoint live with real auth
+4. Write a full report to `.qaprobe/`
 
-## How it works
+### Step 4 — Read the report
 
-qa-probe runs three phases in sequence. Each phase writes a cache file so you can re-run individual phases without repeating earlier work.
+**Terminal** — summary table appears immediately after the run.
 
-### Phase 1 — Analyze
+**Detailed report** — open `.qaprobe/report.md` in any Markdown viewer for the full breakdown.
 
-Builds the dependency graph: which backend routes does each frontend page actually call?
-
-1. **Frontend AST walk** — Babel parses every `.js`, `.ts`, `.jsx`, `.tsx` file in `frontendSrc`. Extracts:
-   - Direct axios/fetch calls: `api.get('/alerts')`, `fetch('/api/rules')`
-   - Custom hooks: `useApiData('/playbooks', opts)`, `useApiQuery(['key'], '/endpoint')`
-   - Template literals: `` api.get(`/cases/${id}`) `` → normalized to `/cases/{id}`
-   - String concatenation: `'/users/' + userId` → `/users/{param}`
-
-2. **Route extraction** — Parses `routerFile` for React routes across three patterns:
-   - **JSX routes**: `<Route path="...">`, `<ScopeRoute>`, `<AdminRoute>`, `<PrivateRoute>` (React Router v5/v6 JSX API)
-   - **Object config**: `createBrowserRouter([{path, element, children}])` and `createMemoryRouter` / `createHashRouter` (React Router v6.4+ recommended API)
-   - **TanStack Router**: `createRoute({path, component})` and `createFileRoute('/path')({component})` (v1 API)
-
-3. **Backend spec fetch** — `GET /openapi.json`. Optional `GET /health/features` for feature flag status (FastAPI-specific but configurable).
-
-4. **Graph build** — Strips the `frontendApiPrefix` (e.g. `/api`) from frontend call paths, fuzzy-matches to backend routes, computes blast radius (how many pages call each endpoint).
-
-Output: `.qaprobe/graph.json`
-
-### Phase 2 — Probe
-
-Authenticates once, then fires concurrent HTTP requests at every discovered endpoint.
-
-- **Auth modes**: bearer token, cookie session, API key, none
-- **HTTP probing**: configurable concurrency, timeout, per-request delay
-- **Self-signed TLS**: `ignoreHTTPSErrors: true` for local/staging stacks
-- **SSE verification**: opens the event stream, waits for the first event within `firstEventTimeoutMs`
-- **WebSocket verification**: upgrade handshake + waits for first frame
-- **Schema validation**: compares response fields against the OpenAPI response model
-- **POST safety**: all POST/PUT/DELETE endpoints are skipped unless listed in `safePosts`
-
-Output: `.qaprobe/probe-results.json`
-
-### Phase 3 — Report
-
-Classifies every endpoint with a **9-rule root-cause classifier** (priority order, first match wins):
-
-| Priority | Root Cause | Detection | Fix Hint |
-|---|---|---|---|
-| 1 | `feature_flag_disabled` | 404 at <15ms + path in feature flags | Enable HAS_* flag and restart |
-| 2 | `missing_route` | 404 + not in OpenAPI spec | Fix typo or add include_router() |
-| 3 | `contract_mismatch` | 404 + fuzzy match finds similar route | Fix trailing slash / prefix |
-| 4 | `empty_db` | 200 + empty array | Run seed script |
-| 5 | `auth_scope_mismatch` | 401 / 403 | Use admin user or fix scopes |
-| 6 | `schema_mismatch` | 200 + data + field names differ from spec | Align frontend or backend model |
-| 7 | `stream_dead` | SSE/WS: connected but no events | Fix proxy buffering or event emitter |
-| 8 | `server_error` | 5xx | Check backend logs |
-| 9 | `slow_but_working` | 200 + response time > 80% of timeout | Add index or cache |
-
-**Cluster pass**: if 5+ endpoints under the same path prefix share the same root cause, they're collapsed into one diagnosis.
-
-**Regression diff**: compares the current run against `.qaprobe/history/` and flags new failures and new passes.
-
-Outputs: `.qaprobe/report.json`, `.qaprobe/report.md`, `.qaprobe/ai-context.md`
+**JSON** — `.qaprobe/report.json` for scripting or CI.
 
 ---
 
-## Comparison
+## Understanding the results
 
-| Capability | qa-probe | Schemathesis | Dredd | Stoplight Prism | Optic *(archived)* | Postman |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| Requires OpenAPI spec | optional | required | required | required | required | optional |
-| Frontend AST parsing | ✓ | — | — | — | — | — |
-| Frontend→backend route map | ✓ | — | — | — | — | — |
-| Live HTTP probe (authenticated) | ✓ | ✓ | ✓ | mock only | diff only | ✓ |
-| SSE / WebSocket verification | ✓ | — | — | — | — | — |
-| Root-cause labels | ✓ | — | — | — | — | — |
-| Blast radius (which pages break) | ✓ | — | — | — | — | — |
-| Regression diff (run-to-run) | ✓ | — | — | — | ✓ | — |
-| MCP server (Claude / Cursor) | ✓ | — | — | — | — | — |
-| Headless mode (no spec) | ✓ | — | — | — | — | ✓ |
-| CI exit code gate | ✓ | ✓ | ✓ | — | — | ✓ |
+### Route statuses
 
-**Schemathesis** is excellent at property-based contract fuzzing — it generates edge-case inputs and catches spec violations. qa-probe is complementary: it probes the real app with the real data and tells you *why* pages are blank.
+| Status | What it means |
+|---|---|
+| ✓ healthy | All endpoints probed OK, data present, schema valid |
+| ⚠ degraded | Works but has an issue (empty data, slow response) |
+| ✗ broken | Endpoint is unreachable, 404, or 5xx |
 
-**Dredd** validates backend responses against an OpenAPI spec in CI. It has no concept of the frontend, blast radius, or root causes.
+### Root causes and what to do
 
-**Stoplight Prism** mocks a backend from an OpenAPI spec — useful for frontend development before the backend exists. It never touches a live server.
+| Root Cause | What happened | What to do |
+|---|---|---|
+| `feature_flag_disabled` | Backend router not registered — a `HAS_*` env flag is `false` | Set the flag to `true` in your backend config and restart |
+| `missing_route` | 404 — endpoint doesn't exist in the OpenAPI spec | Check for a typo in the frontend API call path, or a missing `include_router()` in the backend |
+| `contract_mismatch` | 404 — a *similar* route exists (trailing slash, casing) | Align the frontend call to match the exact backend path |
+| `empty_db` | 200 OK but the response is an empty array | Seed your database with test data |
+| `auth_scope_mismatch` | 401 or 403 — test user lacks the required role/scope | Use a user with broader permissions, or check the endpoint's required scopes |
+| `schema_mismatch` | 200 OK but field names don't match the OpenAPI spec | A backend field was renamed — update the frontend component or the backend response model |
+| `stream_dead` | SSE/WebSocket connected but no events arrived | Check the server-side event emitter and proxy config (nginx must allow SSE passthrough) |
+| `server_error` | 5xx response | Check backend logs: `docker logs <api-container> --tail 50` |
+| `slow_but_working` | 200 OK but response time is near the timeout | Add a database index or query result cache |
 
-**Postman** requires a manually maintained collection. qa-probe auto-discovers endpoints from source code.
+### Score breakdown
+
+Each frontend route gets a 0–100 score. The overall score is the average.
+
+```
+100 = all endpoints healthy, data present, schema valid
+80  = healthy but some empty data
+50  = partially working
+0   = completely broken
+```
+
+A score below 80 in CI (`--fail-under 80`) blocks the deploy.
 
 ---
 
-## MCP Server
+## AI / MCP setup
 
-qa-probe includes a Model Context Protocol server. Once running, Claude, Cursor, or any MCP-compatible assistant can query your QA data directly.
+qa-probe includes a **Model Context Protocol (MCP) server**. Once configured, Claude Code, Cursor, or any MCP-compatible AI assistant can query your QA data and explain failures in plain English — no manual report-reading required.
 
-**Setup** — add to `.mcp.json` at your repo root:
+### Step 1 — Run qa-probe once to populate the cache
+
+```bash
+QA_USER=testuser QA_PASS=testpass npx qa-probe run
+```
+
+This creates `.qaprobe/graph.json`, `probe-results.json`, and `report.json`. The MCP server reads from these.
+
+### Step 2 — Add the MCP server to your project
+
+Add to `.mcp.json` at your repo root (create it if it doesn't exist):
 
 ```json
 {
@@ -184,7 +175,7 @@ qa-probe includes a Model Context Protocol server. Once running, Claude, Cursor,
 }
 ```
 
-Or if installed globally:
+If qa-probe is installed globally:
 
 ```json
 {
@@ -197,239 +188,56 @@ Or if installed globally:
 }
 ```
 
-**Available tools:**
+Restart Claude Code or Cursor after saving.
 
-| Tool | What it answers |
+### Step 3 — Ask questions in plain English
+
+You don't need to know the tool names. Just ask naturally:
+
+```
+"Why is /reports showing no data?"
+```
+→ Calls `qa_probe_explain_failure` → returns root cause + exact fix hint
+
+```
+"Which pages will break if the users endpoint goes down?"
+```
+→ Calls `qa_probe_get_blast_radius` → lists every frontend route that calls `GET /users`
+
+```
+"Show me all broken routes"
+```
+→ Calls `qa_probe_get_report` with `filter: broken` → table of broken routes with root causes
+
+```
+"Run a full QA check on the app right now"
+```
+→ Calls `qa_probe_run_analysis` → triggers analyze + probe + report, returns overall score
+
+```
+"Is GET /users returning data right now?"
+```
+→ Calls `qa_probe_probe_endpoint` → live HTTP probe → status 200, 15 items, 42ms
+
+### All available MCP tools
+
+| Tool | Ask it… |
 |---|---|
-| `qa_probe_get_graph` | Which backend routes does `/dashboard` call? |
-| `qa_probe_get_report` | Show me all broken routes and their scores |
-| `qa_probe_probe_endpoint` | Is `GET /alerts` returning data right now? |
-| `qa_probe_explain_failure` | Why is `/rules` showing no data? |
-| `qa_probe_suggest_fix` | What do I do about `feature_flag_disabled` issues? |
-| `qa_probe_get_blast_radius` | What pages break if `GET /alerts` goes down? |
-| `qa_probe_run_analysis` | Run a full QA check and give me the summary |
+| `qa_probe_get_graph` | "Which backend routes does /dashboard call?" |
+| `qa_probe_get_report` | "Show me all broken routes and their scores" |
+| `qa_probe_probe_endpoint` | "Is GET /users returning data right now?" |
+| `qa_probe_explain_failure` | "Why is /reports showing no data?" |
+| `qa_probe_suggest_fix` | "What should I do about feature_flag_disabled issues?" |
+| `qa_probe_get_blast_radius` | "What pages break if the users endpoint goes down?" |
+| `qa_probe_run_analysis` | "Run a full QA check and give me the summary" |
 
-**Example prompts** (works in Claude Code, Cursor, or any MCP client):
-
-```
-"Why is /rules showing no data?"
-→ qa_probe_explain_failure → root cause: empty_db → fix: run seed script
-
-"What pages break if the alerts endpoint goes down?"
-→ qa_probe_get_blast_radius → /alerts, /dashboard, /triage-queue (3 routes)
-
-"Run a full QA check"
-→ qa_probe_run_analysis → triggers analyze + probe + report, returns overall score
-
-"Is GET /alerts returning data right now?"
-→ qa_probe_probe_endpoint → live HTTP probe → status 200, 15 items, 42ms
-```
-
-The MCP server reads from cached `.qaprobe/` files. Run `qa-probe run` first to populate them, then start the MCP server.
-
----
-
-## Configuration Reference
-
-```js
-// qa-probe.config.js
-module.exports = {
-
-  // ── Target ──────────────────────────────────────────────────────────────────
-  baseUrl: 'http://localhost:8000',
-  // URL of your backend API. No trailing slash.
-
-  frontendApiPrefix: '/api',
-  // Prefix the frontend adds to API calls (e.g. axios baseURL: '/api').
-  // Stripped when matching frontend calls to backend routes.
-  // Set to '' if frontend calls /alerts directly (no prefix).
-
-  framework: 'fastapi',
-  // 'fastapi' | 'express' | 'nextjs' | 'generic'
-  // Controls how the OpenAPI spec and auth are fetched.
-
-  openApiUrl: '/openapi.json',
-  // Path to the OpenAPI spec relative to baseUrl.
-  // Set to null to enable headless mode (HTTP status probing only).
-
-  featureStatusUrl: '/health/features',
-  // Optional. FastAPI apps can expose a router status endpoint here.
-  // Format: { "routers": { "/prefix": { "included": bool, "enabled": bool } } }
-  // Set to null to disable feature flag detection.
-
-  // ── Frontend Source ─────────────────────────────────────────────────────────
-  frontendSrc: './frontend/src',
-  // Directory containing all React source files to parse.
-
-  routerFile: './frontend/src/App.tsx',
-  // File containing your React Router <Route> definitions.
-
-  apiClientFile: './frontend/src/utils/api.js',
-  // Optional. Axios client file — used to detect baseURL and interceptors.
-  // Set to null if not applicable.
-
-  // ── Auth ────────────────────────────────────────────────────────────────────
-  auth: {
-    type: 'bearer',
-    // 'bearer'  — POST loginUrl with credentials, extract token from response body
-    // 'cookie'  — POST loginUrl, server sets an HttpOnly session cookie that's reused on every probe
-    // 'api-key' — send a static key header on every request (no login call)
-    // 'none'    — no authentication (public API)
-
-    loginUrl: '/auth/login',
-    // POST endpoint to authenticate. Only used when type is 'bearer'.
-
-    credentials: {
-      username: process.env.QA_USER,
-      password: process.env.QA_PASS,
-      // Always use environment variables. Never hardcode credentials.
-    },
-
-    tokenPath: 'access_token',
-    // JSON path in the login response body containing the bearer token.
-    // If null or not found, qa-probe falls back to checking Set-Cookie headers
-    // for common cookie names: access_token, jwt, auth_token, token, session.
-
-    apiKey: process.env.QA_API_KEY,
-    // Used when type is 'api-key'.
-
-    apiKeyHeader: 'X-API-Key',
-    // HTTP header name to send the API key in.
-  },
-
-  // ── Probe Behavior ──────────────────────────────────────────────────────────
-  probe: {
-    concurrency: 5,
-    // Max concurrent HTTP requests. Increase for faster probing on a healthy API.
-    // Reduce if you see 429 or connection errors.
-
-    delayMs: 50,
-    // Delay between requests within a concurrency batch (milliseconds).
-
-    timeoutMs: 10000,
-    // Per-request timeout (milliseconds). Requests exceeding this are marked as errors.
-
-    ignoreHTTPSErrors: false,
-    // Set true to accept self-signed TLS certificates (local/staging stacks).
-
-    skipPaths: ['^/auth/', '^/health/', '^/openapi', '^/docs', '^/redoc'],
-    // Regex patterns for paths to skip entirely. Applied to the raw backend path.
-
-    safePosts: [],
-    // POST endpoints that are safe to probe (they are reads, not writes).
-    // Example: ['/logs/search', '/query/workbench']
-    // All other POST/PUT/PATCH/DELETE endpoints are skipped.
-
-    pathParamValues: { id: '1' },
-    // Default values for path parameters like {id}, {rule_name}.
-    // qa-probe substitutes these when probing routes like /alerts/{id}.
-
-    sse: {
-      enabled: true,
-      // Whether to probe Server-Sent Event endpoints.
-
-      firstEventTimeoutMs: 5000,
-      // Fail the SSE check if no event arrives within this window.
-
-      paths: [],
-      // Explicit SSE endpoint paths. Auto-detected from content-type: text/event-stream too.
-    },
-
-    ws: {
-      enabled: true,
-      // Whether to probe WebSocket endpoints.
-
-      firstFrameTimeoutMs: 5000,
-      // Fail the WS check if no frame arrives within this window.
-
-      paths: [],
-      // Explicit WebSocket paths (ws:// or wss:// upgrade paths).
-    },
-  },
-
-  // ── Scoring Weights ─────────────────────────────────────────────────────────
-  scoring: {
-    missingRoute:    -50,  // 404 — frontend calls a path that doesn't exist in the spec
-    emptyResponse:   -20,  // 200 but empty — database has no records
-    authError:       -30,  // 401/403 — test user lacks required scope
-    serverError:     -40,  // 5xx — backend error
-    slowResponse:    -10,  // 200 but slow — near the probe timeout
-    disabledFeature: -15,  // 404 — feature flag is disabled
-    schemaMismatch:  -25,  // 200 but response fields differ from spec
-    streamDead:      -35,  // SSE/WS — connected but no events delivered
-  },
-
-  // ── Output ──────────────────────────────────────────────────────────────────
-  output: {
-    dir: '.qaprobe',
-    // Directory where cache files, reports, and history are written.
-
-    keepHistory: 10,
-    // Number of previous runs to keep for regression comparison.
-
-    formats: ['json', 'markdown', 'ai-context'],
-    // Output formats to generate. All three are recommended.
-    // 'ai-context' is a compact summary optimized for LLM context windows.
-  },
-
-  // ── Optional: empty_db fix hint ───────────────────────────────────────────
-  // seedCommand: 'npm run db:seed',
-  // Shell command shown verbatim in the empty_db root cause's fix hint.
-  // When omitted, qa-probe shows a generic "run your seed/fixture script" message.
-
-  // ── Optional: feature flag name overrides ─────────────────────────────────
-  // featureFlagMap: { '/billing': 'HAS_BILLING_V2' },
-  // Maps a path prefix to a custom HAS_* flag name. By default qa-probe
-  // auto-derives `/some-feature` → `HAS_SOME_FEATURE`. Use this only when your
-  // backend's flag name doesn't follow that convention.
-};
-```
-
-### Auth mode examples
-
-**Bearer token (standard)**
-```js
-auth: { type: 'bearer', loginUrl: '/auth/token', credentials: { username: process.env.QA_USER, password: process.env.QA_PASS }, tokenPath: 'access_token' }
-```
-
-**Cookie session** (server sets HttpOnly session cookie on login; reused on every probe)
-```js
-auth: { type: 'cookie', loginUrl: '/auth/login', credentials: { username: process.env.QA_USER, password: process.env.QA_PASS }, cookieName: 'session' }
-```
-
-**Cookie-mode JWT** (token returned in `Set-Cookie` instead of body — use `bearer` mode)
-```js
-// qa-probe falls back to Set-Cookie when access_token is missing from the response body
-auth: { type: 'bearer', loginUrl: '/auth/login', credentials: { username: process.env.QA_USER, password: process.env.QA_PASS }, tokenPath: 'access_token' }
-```
-
-**API key**
-```js
-auth: { type: 'api-key', apiKey: process.env.QA_API_KEY, apiKeyHeader: 'X-API-Key' }
-```
-
-**No auth (public API)**
-```js
-auth: { type: 'none' }
-```
-
----
-
-## CLI Commands
-
-```
-qa-probe analyze   [--config <path>]            Parse frontend + fetch backend spec
-qa-probe probe     [--config <path>]            Authenticate + probe every endpoint
-qa-probe report    [--config <path>] [--fail-under <score>]   Score + classify + output
-qa-probe run       [--config <path>] [--fail-under <score>]   All three phases in sequence
-qa-probe mcp       [--config <path>]            Start MCP server over stdio
-```
-
-`--fail-under <N>`: exits with code 1 if the overall score is below N. Use this as a CI gate.
+> **Note:** MCP output has SQL errors, stack traces, and table names redacted before they reach the AI. The raw data stays on disk.
 
 ---
 
 ## CI / GitHub Actions
+
+Add qa-probe as a CI gate — fail the build if your overall score drops below a threshold.
 
 ```yaml
 # .github/workflows/qa-probe.yml
@@ -444,13 +252,6 @@ jobs:
   qa-probe:
     runs-on: ubuntu-latest
 
-    services:
-      # Start your app here. This example uses docker compose.
-      app:
-        image: your-app:latest
-        ports:
-          - 8000:8000
-
     steps:
       - uses: actions/checkout@v4
 
@@ -458,14 +259,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install qa-probe
-        run: npm install --prefix ./qa-probe qa-probe
+      - name: Start app (adjust to your stack)
+        run: docker compose up -d && sleep 10
 
       - name: Run qa-probe
         env:
           QA_USER: ${{ secrets.QA_PROBE_USER }}
           QA_PASS: ${{ secrets.QA_PROBE_PASS }}
-        run: node qa-probe/bin/qa-probe.js run --fail-under 80
+        run: npx qa-probe run --fail-under 80
 
       - name: Upload report
         if: always()
@@ -475,7 +276,9 @@ jobs:
           path: .qaprobe/
 ```
 
-**Caching the dependency graph between runs** (speeds up probe-only reruns):
+`--fail-under 80` exits with code 1 if the score drops below 80, failing the CI job.
+
+**Cache the graph between runs** (faster reruns — only re-probe when source changes):
 
 ```yaml
       - name: Cache qa-probe graph
@@ -487,24 +290,307 @@ jobs:
 
 ---
 
-## Headless mode
+## Troubleshooting
 
-When `/openapi.json` is unavailable (docs disabled in production, staging behind auth), qa-probe falls back to **headless mode**: it probes the URLs discovered from the frontend source code directly, without backend route matching.
+**"Empty graph — 0 API calls found"**
 
-In headless mode:
-- Root cause rules 1 (`feature_flag_disabled`), 3 (`contract_mismatch`), 6 (`schema_mismatch`) are skipped — they require the OpenAPI spec
-- Rules 2, 4, 5, 7, 8, 9 still apply from HTTP status + response shape alone
-- The report is labeled `headless: true`
+Your API client may use a variable name not in the default detection list. Add `apiClientFile` to your config pointing to the file where your client is created:
+```js
+apiClientFile: './src/utils/api.js'
+```
+qa-probe will auto-detect `axios.create()` instances from that file and add the variable name to the search list.
 
-Enable by setting `openApiUrl: null` in your config.
+**"All endpoints return 401"**
+
+Your `loginUrl` or `credentials` config is wrong, or the response field containing the token (`tokenPath`) doesn't match. Try `tokenPath: 'token'` or `tokenPath: 'data.access_token'`.
+
+**"404 everywhere but the app works fine in the browser"**
+
+Check `frontendApiPrefix`. If your React app calls `/api/users` and your backend serves `/users`, set `frontendApiPrefix: '/api'`. If the frontend calls the backend directly with no prefix, set `frontendApiPrefix: ''`.
+
+**"Empty routes — 0 routes found"**
+
+qa-probe looks for JSX `<Route>`, `createBrowserRouter([...])`, and TanStack Router `createRoute({})`. If your router file uses a pattern not in this list (e.g. a custom wrapper component), set `routerFile` to whichever file actually contains the route definitions.
+
+**"Self-signed certificate errors"**
+
+Set `probe: { ignoreHTTPSErrors: true }` in your config. **Dev/staging only — never production.**
+
+**"Endpoints look healthy but the page is still blank"**
+
+If qa-probe reports `empty_db` — the API is working correctly but your database has no rows. Run your project's seed/fixture script. Set `seedCommand: 'npm run db:seed'` in your config to see the exact command in the fix hint.
 
 ---
 
-## Feature flag detection
+## How it works (deep dive)
 
-If your FastAPI app exposes a router status endpoint, qa-probe uses it to distinguish between "this route is 404 because the feature is disabled" vs "this route genuinely doesn't exist."
+qa-probe runs three phases. Each one writes a cache file so you can re-run individual phases without repeating earlier work.
 
-Expected response format from `featureStatusUrl`:
+### Phase 1 — Analyze
+
+Builds a dependency map: which backend route does each frontend page actually call?
+
+**Frontend AST walk** — Babel parses every `.js/.ts/.jsx/.tsx` file in `frontendSrc`. Detects:
+- `api.get('/users')` — direct axios/fetch calls (auto-detects client variable names)
+- `useApiData('/users', opts)` — custom hook patterns
+- `` api.get(`/cases/${id}`) `` → normalized to `/cases/{id}`
+- `'/users/' + userId` → `/users/{param}`
+
+**Route extraction** — reads `routerFile` and supports all three React router patterns:
+- `<Route path="...">` JSX (React Router v5 / v6 JSX API)
+- `createBrowserRouter([{path, children}])` object config (React Router v6.4+)
+- `createRoute({path, component})` (TanStack Router v1)
+
+**Backend spec** — fetches `/openapi.json` (or your `openApiUrl`). Optionally fetches `/health/features` to detect disabled feature flags.
+
+**Graph** — strips `frontendApiPrefix`, fuzzy-matches paths to backend routes, computes blast radius.
+
+Output: `.qaprobe/graph.json`
+
+### Phase 2 — Probe
+
+Authenticates once, then fires concurrent HTTP requests at every discovered endpoint.
+
+- Configurable concurrency, timeout, per-request delay
+- Self-signed TLS support (`ignoreHTTPSErrors`)
+- SSE: opens the stream, waits for first event within `firstEventTimeoutMs`
+- WebSocket: upgrade handshake, waits for first frame
+- Schema validation: compares response field names against OpenAPI model
+- POST safety: all write-method endpoints skipped unless in `safePosts`
+- 429 backoff: reads `Retry-After` header, retries up to 2x with exponential fallback
+
+Output: `.qaprobe/probe-results.json`
+
+### Phase 3 — Report
+
+Applies the 9-rule root-cause classifier (priority order, first match wins):
+
+| # | Root Cause | Signal |
+|---|---|---|
+| 1 | `feature_flag_disabled` | 404 at <15ms + path in feature flags |
+| 2 | `missing_route` | 404 + not in OpenAPI spec |
+| 3 | `contract_mismatch` | 404 + fuzzy match finds similar route |
+| 4 | `empty_db` | 200 + empty array/body |
+| 5 | `auth_scope_mismatch` | 401 / 403 |
+| 6 | `schema_mismatch` | 200 + field names differ from spec |
+| 7 | `stream_dead` | SSE/WS: connected but no events |
+| 8 | `server_error` | 5xx |
+| 9 | `slow_but_working` | 200 + response time > 80% of timeout |
+
+**Cluster pass** — 5+ endpoints sharing the same prefix and root cause get collapsed into one diagnosis.
+
+**Regression diff** — compares against `.qaprobe/history/` and surfaces new failures and new passes.
+
+Outputs: `.qaprobe/report.json`, `.qaprobe/report.md`, `.qaprobe/ai-context.md`
+
+---
+
+## Configuration reference
+
+```js
+// qa-probe.config.js
+module.exports = {
+
+  // ── Target ──────────────────────────────────────────────────────────────────
+  baseUrl: 'http://localhost:8000',
+  // URL of your backend API. No trailing slash.
+
+  frontendApiPrefix: '/api',
+  // Prefix the frontend adds to API calls (e.g. axios baseURL: '/api').
+  // Stripped when matching frontend calls to backend routes.
+  // Accepts a string OR an array: ['/api/v1', '/api/v2']
+  // Set to '' if frontend calls the backend directly (no prefix).
+
+  framework: 'fastapi',
+  // 'fastapi' | 'express' | 'nextjs' | 'generic'
+  // Controls how the OpenAPI spec and feature flags are fetched.
+
+  openApiUrl: '/openapi.json',
+  // Path to the OpenAPI spec relative to baseUrl.
+  // Set to null to enable headless mode (HTTP status probing only).
+
+  featureStatusUrl: '/health/features',
+  // Optional. Exposes router enable/disable status for feature_flag_disabled detection.
+  // Format: { "routers": { "/prefix": { "included": bool, "enabled": bool } } }
+  // Set to null to disable. FastAPI-specific but works with any backend that matches the format.
+
+  // ── Frontend Source ─────────────────────────────────────────────────────────
+  frontendSrc: './frontend/src',
+  // Directory containing all React source files to parse.
+
+  routerFile: './frontend/src/App.tsx',
+  // File containing your route definitions.
+  // Supports: <Route> JSX, createBrowserRouter([...]), createRoute({}) (TanStack).
+
+  apiClientFile: './frontend/src/utils/api.js',
+  // Optional. The file where your axios client is created.
+  // qa-probe uses this to auto-detect your client variable name via axios.create().
+  // Set to null if not applicable.
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  auth: {
+    type: 'bearer',
+    // 'bearer'  — POST loginUrl, extract token from response body
+    // 'cookie'  — POST loginUrl, server sets HttpOnly session cookie
+    // 'api-key' — send a static key header on every request (no login call)
+    // 'none'    — public API (no authentication)
+
+    loginUrl: '/auth/login',
+    // POST endpoint to authenticate. Only used when type is 'bearer' or 'cookie'.
+
+    credentials: {
+      username: process.env.QA_USER,
+      password: process.env.QA_PASS,
+      // Always use environment variables. Never hardcode credentials.
+    },
+
+    tokenPath: 'access_token',
+    // JSON path in the login response body containing the bearer token.
+    // If not found, qa-probe falls back to checking Set-Cookie headers.
+
+    apiKey: process.env.QA_API_KEY,
+    // Used when type is 'api-key'.
+
+    apiKeyHeader: 'X-API-Key',
+    // HTTP header name to send the API key in. Defaults to 'X-API-Key'.
+  },
+
+  // ── Probe Behavior ──────────────────────────────────────────────────────────
+  probe: {
+    concurrency: 5,
+    // Max concurrent requests. Increase for speed, lower if you hit 429s.
+
+    delayMs: 50,
+    // Milliseconds to wait between requests in a batch.
+
+    timeoutMs: 10000,
+    // Per-request timeout in milliseconds.
+
+    ignoreHTTPSErrors: false,
+    // Set true to accept self-signed TLS certificates. Dev/staging only.
+
+    skipPaths: ['^/auth/', '^/health/', '^/openapi', '^/docs', '^/redoc'],
+    // Regex patterns for paths to skip. Applied to the raw backend path.
+
+    safePosts: [],
+    // POST endpoints that are safe reads (not writes) and should be probed.
+    // Example: ['/search', '/query/workbench', '/logs/search']
+    // All other POST/PUT/PATCH/DELETE endpoints are skipped by default.
+
+    pathParamValues: { id: '1' },
+    // Values substituted for path parameters like {id}, {slug}.
+    // Example: { id: '1', user_id: '42', slug: 'test-post' }
+
+    sse: {
+      enabled: true,
+      firstEventTimeoutMs: 5000,   // fail if no event within this window
+      paths: [],                    // explicit SSE paths; also auto-detected by content-type
+    },
+
+    ws: {
+      enabled: true,
+      firstFrameTimeoutMs: 5000,   // fail if no frame within this window
+      paths: [],                    // explicit WebSocket paths
+    },
+  },
+
+  // ── Scoring Weights ─────────────────────────────────────────────────────────
+  // Penalty applied to a route's 0–100 score for each failing endpoint.
+  scoring: {
+    missingRoute:    -50,
+    emptyResponse:   -20,
+    authError:       -30,
+    serverError:     -40,
+    slowResponse:    -10,
+    disabledFeature: -15,
+    schemaMismatch:  -25,
+    streamDead:      -35,
+  },
+
+  // ── Output ──────────────────────────────────────────────────────────────────
+  output: {
+    dir: '.qaprobe',           // where reports and history are written
+    keepHistory: 10,           // runs to keep for regression comparison
+    formats: ['json', 'markdown', 'ai-context'],
+  },
+
+  // ── Optional extras ─────────────────────────────────────────────────────────
+  seedCommand: 'npm run db:seed',
+  // Shell command shown verbatim in the empty_db fix hint.
+  // When omitted, qa-probe shows a generic "run your seed script" message.
+
+  // featureFlagMap: { '/billing': 'HAS_BILLING_V2' },
+  // Overrides auto-derived HAS_* flag names for specific path prefixes.
+  // By default /some-feature → HAS_SOME_FEATURE.
+};
+```
+
+### Auth mode quick reference
+
+```js
+// Bearer token (most common)
+auth: { type: 'bearer', loginUrl: '/auth/login',
+  credentials: { username: process.env.QA_USER, password: process.env.QA_PASS },
+  tokenPath: 'access_token' }
+
+// Cookie session (server sets HttpOnly cookie on login)
+auth: { type: 'cookie', loginUrl: '/auth/login',
+  credentials: { username: process.env.QA_USER, password: process.env.QA_PASS },
+  cookieName: 'session' }
+
+// API key
+auth: { type: 'api-key', apiKey: process.env.QA_API_KEY, apiKeyHeader: 'X-API-Key' }
+
+// Public API
+auth: { type: 'none' }
+```
+
+---
+
+## CLI commands
+
+```
+qa-probe run       [--config <path>] [--fail-under <N>]   Full pipeline (analyze + probe + report)
+qa-probe analyze   [--config <path>]                       Phase 1 only — build dependency graph
+qa-probe probe     [--config <path>]                       Phase 2 only — probe all endpoints
+qa-probe report    [--config <path>] [--fail-under <N>]   Phase 3 only — score + classify + output
+qa-probe mcp       [--config <path>]                       Start MCP server over stdio
+```
+
+**`--fail-under <N>`** — exits with code 1 if overall score < N. Use as a CI gate.
+
+**Run phases individually** when iterating:
+```bash
+# First run — full pipeline
+npx qa-probe run
+
+# Tweak config → re-probe without re-parsing (fast)
+npx qa-probe probe
+npx qa-probe report
+
+# Re-parse frontend only (after adding new components)
+npx qa-probe analyze
+npx qa-probe probe
+npx qa-probe report
+```
+
+---
+
+## Headless mode
+
+When `/openapi.json` is unavailable (docs disabled in production, spec behind auth), qa-probe falls back to **headless mode**: it probes the URLs discovered from the frontend source code without backend route matching.
+
+In headless mode, root cause rules 1 (`feature_flag_disabled`), 3 (`contract_mismatch`), and 6 (`schema_mismatch`) are skipped — they require the OpenAPI spec. Rules 2, 4, 5, 7, 8, 9 still apply from HTTP status and response shape alone.
+
+Enable: `openApiUrl: null` in your config.
+
+---
+
+## Feature flag detection (FastAPI)
+
+If your FastAPI app exposes a router status endpoint at `featureStatusUrl`, qa-probe uses it to distinguish "this 404 is because the feature is disabled" from "this route genuinely doesn't exist."
+
+Expected JSON format:
 
 ```json
 {
@@ -517,65 +603,72 @@ Expected response format from `featureStatusUrl`:
 }
 ```
 
-The heuristic: a 404 that arrives in **<15ms** at a flagged prefix is classified as `feature_flag_disabled`. A 404 that takes longer is `missing_route` (the router is registered but the specific path doesn't exist).
+qa-probe classifies a 404 as `feature_flag_disabled` when:
+1. The path prefix matches a key in the routers map with `included: false`
+2. The response arrived in under 15ms (meaning the router isn't even registered — a registered-but-broken route takes longer)
+
+---
+
+## vs other tools
+
+| Capability | qa-probe | Schemathesis | Dredd | Stoplight Prism | Postman |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Requires OpenAPI spec | optional | required | required | required | optional |
+| Frontend AST parsing | ✓ | — | — | — | — |
+| Frontend → backend route map | ✓ | — | — | — | — |
+| Live HTTP probe (with real auth) | ✓ | ✓ | ✓ | mock only | ✓ |
+| SSE / WebSocket verification | ✓ | — | — | — | — |
+| Root-cause labels with fix hints | ✓ | — | — | — | — |
+| Blast radius (which pages break) | ✓ | — | — | — | — |
+| Regression diff (run-to-run) | ✓ | — | — | ✓ | — |
+| MCP server (Claude / Cursor) | ✓ | — | — | — | — |
+| Headless mode (no OpenAPI) | ✓ | — | — | — | ✓ |
+| CI exit code gate | ✓ | ✓ | ✓ | — | ✓ |
+
+**Schemathesis** does property-based contract fuzzing — it generates edge-case inputs and catches spec violations you didn't think of. qa-probe is complementary: it probes your real app with real data and explains why pages are blank.
+
+**Postman** requires a manually maintained collection. qa-probe discovers every endpoint automatically from your source code.
 
 ---
 
 ## Security
 
-### Running qa-probe safely
+**Config file is executed as JavaScript.** `qa-probe.config.js` is loaded with `require()` — the same pattern as ESLint, Jest, and Vite. Do not run qa-probe on a project whose config you don't trust.
 
-**Config file is executed as JavaScript.** `qa-probe.config.js` is loaded with `require()` — the same pattern used by ESLint, Jest, and Vite. Do not run qa-probe on a project whose config file you do not trust.
+**`ignoreHTTPSErrors: true` disables TLS verification.** Dev and staging stacks only. Never against a production API.
 
-**`ignoreHTTPSErrors: true` disables TLS verification.** This is intended for local dev stacks with self-signed certificates only. Never use it against a production API — doing so means probe requests are sent over an unverified connection.
+**Credentials never leave your machine.** Auth tokens are held in memory for the run duration and not written to any output file. Set `QA_USER` and `QA_PASS` as environment variables — never hardcode them.
 
-**Path parameters are substituted, not sanitized.** Values in `pathParamValues` are sent verbatim to your API. A high-cost query value at `concurrency: 10` can be a self-inflicted load test. Keep the default `{ id: '1' }` for routine runs.
+**429 rate-limit backoff.** qa-probe reads `Retry-After` headers and backs off automatically (up to 2 retries with exponential fallback). It does not attempt to bypass rate limits.
 
-**No rate-limit bypass.** qa-probe honours `Retry-After` headers and backs off on 429 responses (up to 2 retries with exponential backoff). It does not attempt to circumvent rate limits.
+**MCP output is sanitized.** SQL errors, stack traces, table names, and Python/JS tracebacks are stripped from MCP tool responses before they reach the AI client. Raw data on disk is unredacted.
 
-**MCP server output is sanitized.** Error strings returned through MCP tools have SQL errors, stack traces, and table names redacted before they reach the LLM client. The raw `probe-results.json` file on disk is unredacted.
-
-**Credentials never leave your machine.** Auth tokens are held in memory for the duration of the run and not written to any output file. `qa-probe.config.js` is gitignored by default in the provided `.gitignore`.
-
-### Reporting a vulnerability
-
-Open a GitHub issue tagged `security`. For sensitive disclosures, contact the maintainers directly via the repository contact information.
+To report a security issue, open a GitHub issue tagged `security`.
 
 ---
 
 ## Known limitations
 
-**Dynamic URL construction**
+**Dynamic URL construction** — calls built via arbitrary functions aren't detected:
 ```js
-// qa-probe detects this ✓
-api.get(`/cases/${id}`)
-
-// qa-probe detects this ✓ (normalized to /cases/{param})
-api.get('/cases/' + caseId)
-
-// qa-probe cannot detect this — URL built in a loop or via a factory function
-const url = buildUrl('cases', filters);
-api.get(url);
+api.get(`/cases/${id}`)        // ✓ detected (template literal)
+api.get('/cases/' + caseId)    // ✓ detected (string concat)
+api.get(buildUrl('cases', f))  // ✗ not detected (factory function)
 ```
-Calls built via arbitrary functions or third-party URL builders are not detected. The graph will be incomplete for those routes.
 
-**POST body validation**
-POST endpoints in `safePosts` are probed with an empty body. If your endpoint validates the request body and returns 422 on empty input, qa-probe will classify it as a contract error. Add proper test fixtures for POST endpoints using a dedicated integration test suite (Schemathesis works well for this).
+**POST body validation** — POST endpoints in `safePosts` are probed with an empty body. If your endpoint requires a valid body and returns 422 on empty input, expect false positives. Use Schemathesis for thorough POST contract testing.
 
-**SSE authentication**
-Some backends require the auth token in the query string for SSE connections (e.g. `/alerts/live?token=...`) because browser EventSource does not support custom headers. qa-probe sends the token as a header. If your backend rejects that, the SSE check will show `stream_dead` even when the endpoint is healthy. Set `sse.enabled: false` in that case and verify SSE separately.
+**SSE auth via query string** — some backends require the token in the URL for SSE (`/events?token=...`) because browser `EventSource` doesn't support custom headers. qa-probe sends the token as a header. If that fails, set `sse.enabled: false`.
 
-**React Router code splitting**
-If routes are declared in lazily imported components (dynamic `import()` inside `React.lazy()`), the route extractor may not find them at parse time. Add those paths to your `probe.pathParamValues` config manually.
+**React Router code splitting** — routes declared inside `React.lazy(() => import(...))` may not be found at parse time. Add those paths to your `routerFile` manually, or list them explicitly in the config.
 
-**Multi-frontend monorepos**
-qa-probe assumes one frontend `src` directory. For monorepos with multiple apps, run separate instances with separate configs pointing to each app's `frontendSrc`. Use an array for `frontendApiPrefix` if your app uses multiple API prefixes: `frontendApiPrefix: ['/api/v1', '/api/v2']`.
+**Multi-frontend monorepos** — run separate qa-probe instances per app, each with its own config. Use `frontendApiPrefix: ['/api/v1', '/api/v2']` if a single frontend calls multiple versioned API prefixes.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add framework adapters, root-cause rules, and router pattern extractors.
 
 ## License
 
