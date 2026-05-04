@@ -2,11 +2,13 @@
 
 const { validateSchema } = require('./schema-validator');
 
+const MAX_RETRIES = 2;
+
 /**
  * Probe a single HTTP endpoint.
  * Returns a probe result object.
  */
-async function probeEndpoint(endpoint, headers, http, graph, config) {
+async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0) {
   const { path: endpointPath, method, routeKey } = endpoint;
   const start = Date.now();
 
@@ -19,6 +21,14 @@ async function probeEndpoint(endpoint, headers, http, graph, config) {
       // Accept JSON and event-stream (for endpoints that might be either)
       validateStatus: () => true,
     });
+
+    // Handle 429 rate-limit with backoff and retry
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfter = res.headers['retry-after'];
+      const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempt) * 1000;
+      await new Promise(r => setTimeout(r, waitMs));
+      return probeEndpoint(endpoint, headers, http, graph, config, attempt + 1);
+    }
 
     const ms = Date.now() - start;
     const body = res.data;
@@ -74,6 +84,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config) {
       schemaValid,
       schemaErrors,
       contentType: res.headers['content-type'] || null,
+      retries: attempt,
     };
   } catch (err) {
     const ms = Date.now() - start;
@@ -85,6 +96,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config) {
       itemCount: null,
       schemaValid: null,
       schemaErrors: [],
+      retries: attempt,
     };
   }
 

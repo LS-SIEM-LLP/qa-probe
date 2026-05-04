@@ -3,6 +3,7 @@
 const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { CallToolRequestSchema, ListToolsRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
+const { sanitizeResult } = require('./sanitize');
 
 const tools = [
   require('./tools/get-graph'),
@@ -55,11 +56,11 @@ async function startMcpServer(config) {
     try {
       const result = await tool.execute(args || {}, { ...state, updateState });
       return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(sanitizeResult(result), null, 2) }],
       };
     } catch (err) {
       return {
-        content: [{ type: 'text', text: JSON.stringify({ error: err.message }) }],
+        content: [{ type: 'text', text: JSON.stringify(sanitizeResult({ error: err.message })) }],
         isError: true,
       };
     }

@@ -92,7 +92,10 @@ Builds the dependency graph: which backend routes does each frontend page actual
    - Template literals: `` api.get(`/cases/${id}`) `` → normalized to `/cases/{id}`
    - String concatenation: `'/users/' + userId` → `/users/{param}`
 
-2. **Route extraction** — Parses `routerFile` (your `App.tsx`) for `<Route path="...">`, `<ScopeRoute>`, `<AdminRoute>` elements. Normalizes React Router v6 relative paths.
+2. **Route extraction** — Parses `routerFile` for React routes across three patterns:
+   - **JSX routes**: `<Route path="...">`, `<ScopeRoute>`, `<AdminRoute>`, `<PrivateRoute>` (React Router v5/v6 JSX API)
+   - **Object config**: `createBrowserRouter([{path, element, children}])` and `createMemoryRouter` / `createHashRouter` (React Router v6.4+ recommended API)
+   - **TanStack Router**: `createRoute({path, component})` and `createFileRoute('/path')({component})` (v1 API)
 
 3. **Backend spec fetch** — `GET /openapi.json`. Optional `GET /health/features` for feature flag status (FastAPI-specific but configurable).
 
@@ -518,6 +521,28 @@ The heuristic: a 404 that arrives in **<15ms** at a flagged prefix is classified
 
 ---
 
+## Security
+
+### Running qa-probe safely
+
+**Config file is executed as JavaScript.** `qa-probe.config.js` is loaded with `require()` — the same pattern used by ESLint, Jest, and Vite. Do not run qa-probe on a project whose config file you do not trust.
+
+**`ignoreHTTPSErrors: true` disables TLS verification.** This is intended for local dev stacks with self-signed certificates only. Never use it against a production API — doing so means probe requests are sent over an unverified connection.
+
+**Path parameters are substituted, not sanitized.** Values in `pathParamValues` are sent verbatim to your API. A high-cost query value at `concurrency: 10` can be a self-inflicted load test. Keep the default `{ id: '1' }` for routine runs.
+
+**No rate-limit bypass.** qa-probe honours `Retry-After` headers and backs off on 429 responses (up to 2 retries with exponential backoff). It does not attempt to circumvent rate limits.
+
+**MCP server output is sanitized.** Error strings returned through MCP tools have SQL errors, stack traces, and table names redacted before they reach the LLM client. The raw `probe-results.json` file on disk is unredacted.
+
+**Credentials never leave your machine.** Auth tokens are held in memory for the duration of the run and not written to any output file. `qa-probe.config.js` is gitignored by default in the provided `.gitignore`.
+
+### Reporting a vulnerability
+
+Open a GitHub issue tagged `security`. For sensitive disclosures, contact the maintainers directly via the repository contact information.
+
+---
+
 ## Known limitations
 
 **Dynamic URL construction**
@@ -544,7 +569,7 @@ Some backends require the auth token in the query string for SSE connections (e.
 If routes are declared in lazily imported components (dynamic `import()` inside `React.lazy()`), the route extractor may not find them at parse time. Add those paths to your `probe.pathParamValues` config manually.
 
 **Multi-frontend monorepos**
-qa-probe assumes one frontend `src` directory. For monorepos with multiple apps, run separate instances with separate configs pointing to each app's `frontendSrc`.
+qa-probe assumes one frontend `src` directory. For monorepos with multiple apps, run separate instances with separate configs pointing to each app's `frontendSrc`. Use an array for `frontendApiPrefix` if your app uses multiple API prefixes: `frontendApiPrefix: ['/api/v1', '/api/v2']`.
 
 ---
 

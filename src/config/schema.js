@@ -59,7 +59,7 @@ const OutputSchema = z.object({
 const ConfigSchema = z.object({
   // Target
   baseUrl: z.string().url('baseUrl must be a valid URL'),
-  frontendApiPrefix: z.string().default('/api'),
+  frontendApiPrefix: z.union([z.string(), z.array(z.string())]).default('/api'),
   framework: z.enum(['fastapi', 'express', 'nextjs', 'generic']).default('fastapi'),
   openApiUrl: z.string().default('/openapi.json'),
   featureStatusUrl: z.string().nullable().default('/health/features'),

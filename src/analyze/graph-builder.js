@@ -29,16 +29,12 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config }) {
   // --- 2. For each api call, find the matching backend route ---
   const prefix = config.frontendApiPrefix || '/api';
 
-  function stripPrefix(p) {
-    return p.startsWith(prefix) ? p.slice(prefix.length) : p;
-  }
-
   // --- 3. Build blast radius: which frontend routes call each backend route ---
   const blastRadius = {};
 
   for (const [routePath, { component, authGuard, requiredScopes, apiCallsList }] of Object.entries(routeApiCallMap)) {
     for (const call of apiCallsList) {
-      const backendPath = stripPrefix(call.path);
+      const backendPath = stripFrontendPrefix(call.path, prefix);
       const matchKey = matchBackendRoute(`${call.method} ${backendPath}`, backendRoutes);
 
       if (matchKey) {
@@ -57,7 +53,7 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config }) {
   const frontendRoutesOut = {};
   for (const [routePath, data] of Object.entries(routeApiCallMap)) {
     const apiCallsAnnotated = data.apiCallsList.map(call => {
-      const backendPath = stripPrefix(call.path);
+      const backendPath = stripFrontendPrefix(call.path, prefix);
       const matchKey = matchBackendRoute(`${call.method} ${backendPath}`, backendRoutes);
       return {
         method: call.method,
@@ -98,6 +94,18 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config }) {
     frontendRoutes: frontendRoutesOut,
     blastRadius,
   };
+}
+
+/**
+ * Strip the frontend API prefix from a path.
+ * Supports both a single string prefix and an array of prefixes.
+ */
+function stripFrontendPrefix(p, prefix) {
+  const prefixes = Array.isArray(prefix) ? prefix : [prefix];
+  for (const pfx of prefixes) {
+    if (p.startsWith(pfx)) return p.slice(pfx.length) || '/';
+  }
+  return p;
 }
 
 /**
