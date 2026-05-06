@@ -62,6 +62,12 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
         score += (weights.slowResponse || -10);
         penalties.push({ probeKey, reason: 'slow_but_working', delta: weights.slowResponse || -10 });
         break;
+      case 'sample_not_found':
+      case 'invalid_sample_params':
+      case 'timeout':
+        score += (weights.slowResponse || -10);
+        penalties.push({ probeKey, reason: rootCause, delta: weights.slowResponse || -10 });
+        break;
     }
   }
 

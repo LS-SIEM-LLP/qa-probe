@@ -10,7 +10,7 @@
   "files": ["bin/", "src/", "examples/", "README.md", "LICENSE", "CHANGELOG.md"],
   "scripts": {
     "start": "node bin/qa-probe.js",
-    "test": "node --test src/**/*.test.js"
+    "test": "node --test src"
   },
   "dependencies": {
     "@babel/parser": "^7.24.0",

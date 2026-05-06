@@ -53,7 +53,7 @@ const ScoringSchema = z.object({
 const OutputSchema = z.object({
   dir: z.string().default('.qaprobe'),
   keepHistory: z.number().default(10),
-  formats: z.array(z.enum(['json', 'markdown', 'ai-context'])).default(['json', 'markdown', 'ai-context']),
+  formats: z.array(z.enum(['json', 'markdown', 'ai-context', 'html'])).default(['json', 'markdown', 'ai-context', 'html']),
 });
 
 const ConfigSchema = z.object({

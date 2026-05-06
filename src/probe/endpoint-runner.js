@@ -78,6 +78,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     result = {
       status: res.status,
       ms,
+      routeKey,
       empty,
       itemCount,
       emptyReason,
@@ -91,6 +92,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     result = {
       status: null,
       ms,
+      routeKey,
       error: err.message,
       empty: false,
       itemCount: null,

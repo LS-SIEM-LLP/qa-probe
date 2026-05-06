@@ -13,8 +13,11 @@
  *  6. schema_mismatch        — 200 + data present + schemaErrors not empty
  *  7. stream_dead            — SSE/WS connected=false OR no first event/frame
  *  8. server_error           — 5xx
- *  9. slow_but_working       — 200 + ms > 80% of timeout
- * 10. ok                     — everything else
+ *  9. invalid_sample_params  — 400/422 from generated sample params/query
+ * 10. sample_not_found       — 404 on a known templated backend route
+ * 11. timeout                — request timed out/aborted
+ * 12. slow_but_working       — 200 + ms > 80% of timeout
+ * 13. ok                     — everything else
  */
 
 const DISABLED_FEATURE_MAX_MS = 15; // 404 at <15ms → flag disabled
@@ -22,7 +25,7 @@ const DISABLED_FEATURE_MAX_MS = 15; // 404 at <15ms → flag disabled
 function classifyEndpoint(endpointKey, probeResult, graph, config) {
   if (!probeResult) return { rootCause: 'not_probed', rootCauseDetail: null, fixHint: null };
 
-  const { status, ms, empty, schemaErrors, type, connected, error } = probeResult;
+  const { status, ms, empty, schemaErrors, type, connected, error, routeKey } = probeResult;
 
   // --- Rule 7: stream_dead (SSE/WS) ---
   if (type === 'sse' || type === 'ws') {
@@ -62,6 +65,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   // A fuzzy match is a better diagnosis than a generic "not found" — it tells the
   // developer exactly which route to align to, rather than leaving them to search.
   if (status === 404) {
+    if (routeKey && /\{[^}]+\}/.test(routeKey)) {
+      return {
+        rootCause: 'sample_not_found',
+        rootCauseDetail: `${endpointKey} -> 404 on known backend route ${routeKey}. The sampled path value probably does not exist.`,
+        fixHint: 'Set probe.pathParamValues in qa-probe.config.js to IDs/slugs that exist in your demo or test database.',
+      };
+    }
+
     const fuzzyMatch = findFuzzyBackendMatch(endpointKey, graph);
     if (fuzzyMatch) {
       return {
@@ -90,6 +101,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
       rootCause: 'server_error',
       rootCauseDetail: `${endpointKey} → ${status}. Backend returned a server error.`,
       fixHint: 'Check backend logs for a traceback (e.g. `docker logs <api-container> --tail 50`).',
+    };
+  }
+
+  if (status === 400 || status === 422) {
+    return {
+      rootCause: 'invalid_sample_params',
+      rootCauseDetail: `${endpointKey} -> ${status}. Generated probe parameters did not satisfy this endpoint's validation rules.`,
+      fixHint: 'Tune probe.pathParamValues or skip this endpoint if it requires domain-specific query parameters.',
     };
   }
 
@@ -147,6 +166,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   }
 
   // Anything else — not probed or unknown
+  if (status === null && error && /timeout|aborted|ECONNRESET|socket hang up/i.test(error)) {
+    return {
+      rootCause: 'timeout',
+      rootCauseDetail: `${endpointKey} -> ${error}`,
+      fixHint: 'Check whether the endpoint is long-running, streaming, calling an external model, or should be skipped/tuned for smoke tests.',
+    };
+  }
+
   return {
     rootCause: 'unknown',
     rootCauseDetail: `${endpointKey} → status=${status}, error=${error || 'none'}`,

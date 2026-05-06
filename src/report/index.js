@@ -7,16 +7,18 @@ const { detectRegression } = require('./regression');
 const { writeJsonReport } = require('./formatters/json');
 const { writeMarkdownReport } = require('./formatters/markdown');
 const { writeAiContext } = require('./formatters/ai-context');
+const { writeHtmlReport } = require('./formatters/html');
 const { saveReport } = require('../cache');
 const { loadPreviousRun, saveToHistory } = require('../cache/history');
 
 async function runReport(graph, probeResults, config) {
   const spinner = createSpinner();
+  const effectiveProbeResults = enrichProbeResultsWithRouteKeys(graph, probeResults, config);
 
   // 1. Classify every probed endpoint
   spinner.start('Classifying root causes...');
   const endpointRootCauses = {};
-  for (const [endpointKey, probe] of Object.entries(probeResults || {})) {
+  for (const [endpointKey, probe] of Object.entries(effectiveProbeResults || {})) {
     endpointRootCauses[endpointKey] = classifyEndpoint(endpointKey, probe, graph, config);
   }
 
@@ -29,14 +31,19 @@ async function runReport(graph, probeResults, config) {
   const routeScores = {};
   for (const [routePath, routeData] of Object.entries(graph.frontendRoutes || {})) {
     if (routePath === '__unmatched__') continue;
-    const scored = scoreRoute(routePath, routeData, probeResults, endpointRootCauses, config);
+    const scored = scoreRoute(routePath, routeData, effectiveProbeResults, endpointRootCauses, config);
     routeScores[routePath] = scored;
   }
   const overallScore = scoreOverall(routeScores);
   spinner.succeed(`Routes scored — overall: ${overallScore}/100`);
 
   // 3. Blast radius
-  const blastRadius = getBlastRadiusSummary(graph, probeResults, endpointRootCauses);
+  const blastRadius = getBlastRadiusSummary(graph, effectiveProbeResults, endpointRootCauses);
+
+  // 3b. Endpoint-level diagnostics. These are the product evidence layer:
+  // route scores answer "is my page healthy?", diagnostics answer "what did
+  // qa-probe actually observe on the wire?"
+  const endpointDiagnostics = buildEndpointDiagnostics(graph, effectiveProbeResults, endpointRootCauses);
 
   // 4. Root cause summary (aggregate by type)
   const rootCauseSummary = {};
@@ -103,6 +110,7 @@ async function runReport(graph, probeResults, config) {
     routes: routesOut,
     rootCauseSummary,
     blastRadius,
+    endpointDiagnostics,
     clusters,
     regression: null,
   };
@@ -119,10 +127,148 @@ async function runReport(graph, probeResults, config) {
   if (formats.includes('json')) writeJsonReport(report, config);
   if (formats.includes('markdown')) writeMarkdownReport(report, config);
   if (formats.includes('ai-context')) writeAiContext(report, graph, config);
+  if (formats.includes('html')) writeHtmlReport(report, config);
 
   spinner.succeed(`Reports written to ${config.output.dir}/`);
 
   return report;
+}
+
+function enrichProbeResultsWithRouteKeys(graph, probeResults, config) {
+  const enriched = {};
+  for (const [endpointKey, probe] of Object.entries(probeResults || {})) {
+    enriched[endpointKey] = {
+      ...probe,
+      routeKey: probe.routeKey || findRouteKeyForEndpoint(endpointKey, graph, config),
+    };
+  }
+  return enriched;
+}
+
+function findRouteKeyForEndpoint(endpointKey, graph, config) {
+  const firstSpace = endpointKey.indexOf(' ');
+  if (firstSpace === -1) return null;
+  const method = endpointKey.slice(0, firstSpace);
+  const endpointPath = endpointKey.slice(firstSpace + 1);
+  const endpointPathNoQuery = endpointPath.split('?')[0];
+  const paramValues = (config && config.probe && config.probe.pathParamValues) || {};
+
+  for (const routeKey of Object.keys((graph && graph.backendRoutes) || {})) {
+    const routeSpace = routeKey.indexOf(' ');
+    if (routeSpace === -1) continue;
+    const routeMethod = routeKey.slice(0, routeSpace);
+    if (routeMethod !== method) continue;
+    const routePath = routeKey.slice(routeSpace + 1);
+    if (routePath === endpointPath || routePath === endpointPathNoQuery) return routeKey;
+    if (fillPathParams(routePath, paramValues) === endpointPathNoQuery) return routeKey;
+  }
+
+  return null;
+}
+
+function fillPathParams(routePath, paramValues) {
+  return routePath.replace(/\{([^}]+)\}/g, (_, name) => {
+    return paramValues[name] || paramValues.id || '1';
+  });
+}
+
+function buildEndpointDiagnostics(graph, probeResults, endpointRootCauses) {
+  const routeIndex = buildEndpointRouteIndex(graph);
+
+  return Object.entries(endpointRootCauses || {})
+    .filter(([, cause]) => cause && cause.rootCause && cause.rootCause !== 'ok')
+    .map(([endpointKey, cause]) => {
+      const probe = (probeResults && probeResults[endpointKey]) || {};
+      const affectedRoutes = routeIndex[endpointKey] || [];
+      return {
+        endpoint: endpointKey,
+        rootCause: cause.rootCause,
+        label: displayCause(cause.rootCause),
+        severity: severityFor(cause.rootCause),
+        confidence: confidenceFor(cause.rootCause, probe),
+        affectedRoutes,
+        affectedRouteCount: affectedRoutes.length,
+        status: probe.status === undefined ? null : probe.status,
+        ms: probe.ms === undefined ? null : probe.ms,
+        empty: !!probe.empty,
+        emptyReason: probe.emptyReason || null,
+        itemCount: probe.itemCount === undefined ? null : probe.itemCount,
+        error: probe.error || null,
+        detail: cause.rootCauseDetail || null,
+        fixHint: cause.fixHint || null,
+      };
+    })
+    .sort((a, b) => {
+      const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+      return (severityOrder[a.severity] - severityOrder[b.severity]) ||
+        (b.affectedRouteCount - a.affectedRouteCount) ||
+        a.endpoint.localeCompare(b.endpoint);
+    });
+}
+
+function buildEndpointRouteIndex(graph) {
+  const index = {};
+  for (const [routePath, routeData] of Object.entries((graph && graph.frontendRoutes) || {})) {
+    const calls = routeData.apiCalls || [];
+    for (const call of calls) {
+      const endpointKey = `${call.method} ${call.backendPath || call.path}`;
+      if (!index[endpointKey]) index[endpointKey] = [];
+      if (!index[endpointKey].includes(routePath)) index[endpointKey].push(routePath);
+    }
+  }
+  return index;
+}
+
+function displayCause(rootCause) {
+  const labels = {
+    empty_db: 'no_data',
+    contract_mismatch: 'contract_mismatch',
+    missing_route: 'missing_route',
+    server_error: 'server_error',
+    auth_scope_mismatch: 'auth_scope_mismatch',
+    schema_mismatch: 'schema_mismatch',
+    stream_dead: 'stream_dead',
+    slow_but_working: 'slow_but_working',
+    feature_flag_disabled: 'feature_flag_disabled',
+    sample_not_found: 'sample_not_found',
+    invalid_sample_params: 'invalid_sample',
+    timeout: 'timeout',
+    unknown: 'needs_review',
+  };
+  return labels[rootCause] || rootCause || 'needs_review';
+}
+
+function severityFor(rootCause) {
+  switch (rootCause) {
+    case 'server_error':
+    case 'missing_route':
+    case 'contract_mismatch':
+    case 'auth_scope_mismatch':
+    case 'schema_mismatch':
+    case 'stream_dead':
+      return 'high';
+    case 'feature_flag_disabled':
+    case 'slow_but_working':
+    case 'unknown':
+    case 'sample_not_found':
+    case 'invalid_sample_params':
+    case 'timeout':
+      return 'medium';
+    case 'empty_db':
+      return 'low';
+    default:
+      return 'info';
+  }
+}
+
+function confidenceFor(rootCause, probe) {
+  if (rootCause === 'empty_db') return 'medium';
+  if (rootCause === 'unknown') return 'low';
+  if (rootCause === 'sample_not_found') return 'high';
+  if (rootCause === 'invalid_sample_params') return 'medium';
+  if (rootCause === 'timeout') return 'medium';
+  if (probe && probe.status === null) return 'medium';
+  return 'high';
 }
 
 function createSpinner() {
@@ -145,4 +291,4 @@ function createSpinner() {
   }
 }
 
-module.exports = { runReport };
+module.exports = { runReport, buildEndpointDiagnostics };

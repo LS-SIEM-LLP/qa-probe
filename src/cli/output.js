@@ -31,7 +31,12 @@ function printSummary(report) {
   if (report.rootCauseSummary && Object.keys(report.rootCauseSummary).length > 0) {
     console.log(chalk.bold('  Root causes:'));
     for (const [cause, data] of Object.entries(report.rootCauseSummary)) {
-      console.log(`    ${chalk.cyan(cause)}: ${data.count} route(s)`);
+      console.log(`    ${chalk.cyan(displayCause(cause))}: ${data.count} endpoint(s)`);
+    }
+    if (report.endpointDiagnostics && report.endpointDiagnostics.length > 0) {
+      const high = report.endpointDiagnostics.filter(d => d.severity === 'high' || d.severity === 'critical').length;
+      const mapped = report.endpointDiagnostics.filter(d => d.affectedRouteCount > 0).length;
+      console.log(`    ${chalk.gray('diagnostics')}: ${report.endpointDiagnostics.length} issue(s), ${high} high severity, ${mapped} mapped to route(s)`);
     }
     console.log('');
   }
@@ -58,7 +63,7 @@ function printSummary(report) {
       route.length > 30 ? route.slice(0, 29) + '…' : route,
       color(String(s)),
       statusIcon(data.status) + ' ' + (data.status || '?'),
-      (data.rootCause || '').replace(/_/g, ' '),
+      displayCause(data.rootCause || '').replace(/_/g, ' '),
     ]);
   }
 
@@ -114,6 +119,13 @@ function printProbeResults(results) {
   console.log(`  Error  : ${chalk.red(errors)}`);
   console.log(`  Empty  : ${chalk.yellow(empty)} (200 but no data)`);
   console.log('');
+}
+
+function displayCause(rootCause) {
+  if (rootCause === 'empty_db') return 'no_data';
+  if (rootCause === 'invalid_sample_params') return 'invalid_sample';
+  if (rootCause === 'unknown') return 'needs_review';
+  return rootCause || 'ok';
 }
 
 module.exports = { printSummary, printGraphSummary, printProbeResults };

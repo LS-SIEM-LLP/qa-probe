@@ -175,6 +175,43 @@ describe('missing_route', () => {
 });
 
 // ---------------------------------------------------------------------------
+// sample_not_found / invalid_sample_params / timeout
+// ---------------------------------------------------------------------------
+
+describe('probe sample diagnostics', () => {
+  test('404 on known templated backend route -> sample_not_found', () => {
+    const result = classifyEndpoint(
+      'GET /cases/1',
+      probe({ status: 404, routeKey: 'GET /cases/{case_id}' }),
+      graph({ backendRoutes: { 'GET /cases/{case_id}': {} } }),
+      cfg,
+    );
+    assert.equal(result.rootCause, 'sample_not_found');
+    assert.ok(result.fixHint.includes('pathParamValues'));
+  });
+
+  test('422 validation failure -> invalid_sample_params', () => {
+    const result = classifyEndpoint(
+      'GET /executive/summary?period=1',
+      probe({ status: 422 }),
+      graph(),
+      cfg,
+    );
+    assert.equal(result.rootCause, 'invalid_sample_params');
+  });
+
+  test('timed out request -> timeout', () => {
+    const result = classifyEndpoint(
+      'GET /agent/report',
+      probe({ status: null, error: 'timeout of 15000ms exceeded' }),
+      graph(),
+      cfg,
+    );
+    assert.equal(result.rootCause, 'timeout');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Rule 4 — empty_db
 // ---------------------------------------------------------------------------
 

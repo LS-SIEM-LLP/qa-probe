@@ -21,7 +21,7 @@ Root causes detected:
 └──────────────────────────────┴────────┴────────────┴──────────────────────────┘
 ```
 
-qa-probe is a Node.js CLI that maps your React frontend routes to your backend API endpoints, probes every one live with real auth, and gives you a specific root-cause diagnosis — not just a status code. Works with FastAPI, Express, any OpenAPI backend.
+qa-probe is a Node.js CLI that maps common React frontend API calls to backend routes, probes safe endpoints live with real auth, and gives you a specific root-cause diagnosis instead of only a status code. It is strongest on React apps backed by FastAPI or Express with OpenAPI enabled.
 
 ---
 
@@ -35,7 +35,7 @@ The cause is almost always one of:
 - The database is connected but the table has no rows
 - A backend refactor renamed `user_name` → `name` and the frontend component still reads the old field
 
-Playwright and Schemathesis won't catch this. **qa-probe will — automatically, from your source code.**
+Playwright and Schemathesis are still valuable: Playwright verifies user journeys, and Schemathesis fuzzes API contracts. qa-probe fills a different gap: it builds a source-aware smoke map from frontend calls to live backend responses, then explains why a page has no data.
 
 ---
 
@@ -46,6 +46,22 @@ Playwright and Schemathesis won't catch this. **qa-probe will — automatically,
 | Run it from the terminal and read the report myself | [Manual setup (5 min)](#manual-setup-5-min) |
 | Ask Claude / Cursor questions about my broken pages | [AI / MCP setup](#ai--mcp-setup) |
 | Use it in CI to block broken deploys | [CI / GitHub Actions](#ci--github-actions) |
+
+---
+
+## Supported patterns
+
+qa-probe is intentionally conservative. It works best when your app uses:
+
+- React Router JSX, `createBrowserRouter(...)`, or TanStack `createRoute(...)`.
+- Axios-style clients such as `api.get('/users')`, including project-specific clients created with `axios.create(...)`.
+- Simple custom hooks such as `useApiData('/users')` and `useApiQuery(['users'], '/users')`.
+- String literals, template literals, or simple string concatenation for paths.
+- FastAPI, Express, Next.js, or generic OpenAPI backends.
+
+It does not automatically understand every frontend data layer. Expect to add adapters or explicit config for GraphQL, tRPC, generated SDK clients, heavily dynamic URL factories, custom service layers, and Next server actions. See [Known limitations](#known-limitations) for details.
+
+For a quick public demo outline, see [`examples/demo-fixture`](examples/demo-fixture).
 
 ---
 
@@ -368,8 +384,8 @@ Applies the 9-rule root-cause classifier (priority order, first match wins):
 | # | Root Cause | Signal |
 |---|---|---|
 | 1 | `feature_flag_disabled` | 404 at <15ms + path in feature flags |
-| 2 | `missing_route` | 404 + not in OpenAPI spec |
-| 3 | `contract_mismatch` | 404 + fuzzy match finds similar route |
+| 2 | `contract_mismatch` | 404 + fuzzy match finds similar route |
+| 3 | `missing_route` | 404 + not in OpenAPI spec |
 | 4 | `empty_db` | 200 + empty array/body |
 | 5 | `auth_scope_mismatch` | 401 / 403 |
 | 6 | `schema_mismatch` | 200 + field names differ from spec |
@@ -655,6 +671,8 @@ api.get(`/cases/${id}`)        // ✓ detected (template literal)
 api.get('/cases/' + caseId)    // ✓ detected (string concat)
 api.get(buildUrl('cases', f))  // ✗ not detected (factory function)
 ```
+
+**Generated clients and service layers** - qa-probe detects visible HTTP calls and a few common hook patterns. If your app hides requests behind generated SDK methods, GraphQL clients, tRPC routers, Next server actions, or custom service-layer functions, add a parser adapter or expose a small wrapper that qa-probe can recognize.
 
 **POST body validation** — POST endpoints in `safePosts` are probed with an empty body. If your endpoint requires a valid body and returns 422 on empty input, expect false positives. Use Schemathesis for thorough POST contract testing.
 
