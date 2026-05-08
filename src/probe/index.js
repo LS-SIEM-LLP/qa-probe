@@ -8,6 +8,7 @@ const { checkWS } = require('./ws-checker');
 const { runConcurrent } = require('./rate-limiter');
 const { createHttpClient } = require('../analyze/backend-fetcher');
 const { saveProbeResults } = require('../cache');
+const { snapshotSchemas } = require('./schema-history');
 
 async function runProbe(graph, config) {
   const http = createHttpClient(config);
@@ -77,6 +78,10 @@ async function runProbe(graph, config) {
   }
 
   // 7. Save results
+  const schemaDrift = snapshotSchemas(results, config);
+  if (schemaDrift.length > 0) {
+    results.__schemaDrift = schemaDrift;
+  }
   await saveProbeResults(results, config);
   spinner.succeed(`Probe results saved → ${config.output.dir}/probe-results.json`);
 

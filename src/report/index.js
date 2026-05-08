@@ -19,6 +19,7 @@ async function runReport(graph, probeResults, config) {
   spinner.start('Classifying root causes...');
   const endpointRootCauses = {};
   for (const [endpointKey, probe] of Object.entries(effectiveProbeResults || {})) {
+    if (endpointKey.startsWith('__')) continue;
     endpointRootCauses[endpointKey] = classifyEndpoint(endpointKey, probe, graph, config);
   }
 
@@ -113,6 +114,8 @@ async function runReport(graph, probeResults, config) {
     endpointDiagnostics,
     clusters,
     regression: null,
+    parseWarnings: graph.warnings || [],
+    schemaDrift: (probeResults && probeResults.__schemaDrift) || [],
   };
 
   const regression = detectRegression(report, previousRun);
@@ -227,6 +230,9 @@ function displayCause(rootCause) {
     server_error: 'server_error',
     auth_scope_mismatch: 'auth_scope_mismatch',
     schema_mismatch: 'schema_mismatch',
+    type_mismatch: 'type_mismatch',
+    missing_required_field: 'missing_required_field',
+    field_renamed: 'field_renamed',
     stream_dead: 'stream_dead',
     slow_but_working: 'slow_but_working',
     feature_flag_disabled: 'feature_flag_disabled',
@@ -245,6 +251,9 @@ function severityFor(rootCause) {
     case 'contract_mismatch':
     case 'auth_scope_mismatch':
     case 'schema_mismatch':
+    case 'type_mismatch':
+    case 'missing_required_field':
+    case 'field_renamed':
     case 'stream_dead':
       return 'high';
     case 'feature_flag_disabled':

@@ -36,8 +36,34 @@ function writeMarkdownReport(report, config) {
     lines.push('');
   }
 
+  if (report.parseWarnings && report.parseWarnings.length > 0) {
+    const skipped = report.parseWarnings.filter(w => !w.staleParse).length;
+    lines.push(`## Parse Warnings`);
+    lines.push('');
+    lines.push(`⚠️ ${skipped || report.parseWarnings.length} files skipped during parse`);
+    lines.push('');
+    lines.push('| File | Line | Error |');
+    lines.push('|---|---:|---|');
+    for (const warning of report.parseWarnings.slice(0, 50)) {
+      const stale = warning.staleParse ? ' (used cached AST)' : '';
+      lines.push(`| \`${escapeCell(warning.file)}\` | ${warning.line || '?'} | ${escapeCell(warning.error + stale)} |`);
+    }
+    lines.push('');
+  }
+
   if (diagnostics.length > 0) {
     writeEndpointDiagnostics(lines, diagnostics);
+  }
+
+  if (report.schemaDrift && report.schemaDrift.length > 0) {
+    lines.push('## Schema Drift');
+    lines.push('');
+    lines.push('| Endpoint | Kind | Field | Detail |');
+    lines.push('|---|---|---|---|');
+    for (const change of report.schemaDrift.slice(0, 50)) {
+      lines.push(`| \`${change.endpoint}\` | \`${change.kind}\` | \`${change.field || ''}\` | ${escapeCell(change.detail || '')} |`);
+    }
+    lines.push('');
   }
 
   lines.push('## Routes');

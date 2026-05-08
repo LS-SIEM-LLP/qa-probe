@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.1.0] - 2026-05-08
+
+### Added
+
+- Self-healing parser warnings, parse-cache fallback, and Markdown parse warning reporting.
+- Recursive `React.lazy(() => import(...))` route resolution with cycle/depth protection.
+- Zod-backed OpenAPI response validation with type mismatch, missing required field, and field rename classifications.
+- Schema history snapshots under `.qaprobe/history/schemas/` with additive vs. breaking drift reporting.
+- Stratified safe POST body generation with `empty`, `minimal`, `realistic`, and `example` modes plus per-route overrides.
+
+### Changed
+
+- Safe POST probes now default to minimal schema-derived JSON bodies instead of empty bodies.
+- Analyze output now carries parse warnings into `graph.json` and downstream reports.
+
+---
+
 ## [1.0.0] — 2026-05-04
 
 Initial public release under Apache 2.0.

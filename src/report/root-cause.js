@@ -10,14 +10,16 @@
  *  3. contract_mismatch      — fuzzy match finds backend route but exact path differs
  *  4. empty_db               — 200 + empty array/body + list endpoint
  *  5. auth_scope_mismatch    — 403
- *  6. schema_mismatch        — 200 + data present + schemaErrors not empty
- *  7. stream_dead            — SSE/WS connected=false OR no first event/frame
- *  8. server_error           — 5xx
- *  9. invalid_sample_params  — 400/422 from generated sample params/query
- * 10. sample_not_found       — 404 on a known templated backend route
- * 11. timeout                — request timed out/aborted
- * 12. slow_but_working       — 200 + ms > 80% of timeout
- * 13. ok                     — everything else
+ *  6. type_mismatch          — 200 + data present + wrong field type
+ *  7. missing_required_field — 200 + data present + required field absent
+ *  8. field_renamed          — 200 + bidirectional drift indicates rename
+ *  9. stream_dead            — SSE/WS connected=false OR no first event/frame
+ * 10. server_error           — 5xx
+ * 11. invalid_sample_params  — 400/422 from generated sample params/query
+ * 12. sample_not_found       — 404 on a known templated backend route
+ * 13. timeout                — request timed out/aborted
+ * 14. slow_but_working       — 200 + ms > 80% of timeout
+ * 15. ok                     — everything else
  */
 
 const DISABLED_FEATURE_MAX_MS = 15; // 404 at <15ms → flag disabled
@@ -145,10 +147,11 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
 
     // --- Rule 6: schema_mismatch ---
     if (schemaErrors && schemaErrors.length > 0) {
+      const schemaCause = classifySchemaError(schemaErrors[0]);
       return {
-        rootCause: 'schema_mismatch',
+        rootCause: schemaCause.rootCause,
         rootCauseDetail: `${endpointKey} → 200 but response shape differs from spec: ${schemaErrors[0]}`,
-        fixHint: 'A field was renamed or removed. Align the frontend component or backend response model.',
+        fixHint: schemaCause.fixHint,
       };
     }
 
@@ -189,6 +192,32 @@ function findFeatureFlag(endpointKey, graph) {
     }
   }
   return null;
+}
+
+function classifySchemaError(error) {
+  const message = String(error || '');
+  if (/missing required field/i.test(message)) {
+    return {
+      rootCause: 'missing_required_field',
+      fixHint: 'Return the required field from the backend response or update the OpenAPI schema if the contract changed intentionally.',
+    };
+  }
+  if (/type mismatch/i.test(message)) {
+    return {
+      rootCause: 'type_mismatch',
+      fixHint: 'Align the backend field type with OpenAPI, or update the spec and frontend parser for the new type.',
+    };
+  }
+  if (/no expected fields found|renamed/i.test(message)) {
+    return {
+      rootCause: 'field_renamed',
+      fixHint: 'A field appears to have been renamed. Align the frontend read, backend response, and OpenAPI field name.',
+    };
+  }
+  return {
+    rootCause: 'schema_mismatch',
+    fixHint: 'A field was renamed or removed. Align the frontend component or backend response model.',
+  };
 }
 
 function getFlagName(endpointKey, graph) {
@@ -282,4 +311,4 @@ function clusterRootCauses(endpointResults) {
   return clusters;
 }
 
-module.exports = { classifyEndpoint, clusterRootCauses };
+module.exports = { classifyEndpoint, clusterRootCauses, classifySchemaError };

@@ -31,6 +31,11 @@ function normalizeOpenApiRoutes(openapi) {
           }
         }
 
+        let requestBody = null;
+        if (op.requestBody) {
+          requestBody = resolveRequestBody(op.requestBody, openapi);
+        }
+
         // Collect path parameters
         const parameters = (op.parameters || []).filter(p => p.in === 'path').map(p => p.name);
 
@@ -39,6 +44,7 @@ function normalizeOpenApiRoutes(openapi) {
           tags: op.tags || [],
           requiresAuth,
           parameters,
+          requestBody,
           responseSchema,
           deprecated: !!op.deprecated,
         };
@@ -47,6 +53,22 @@ function normalizeOpenApiRoutes(openapi) {
   }
 
   return routes;
+}
+
+function resolveRequestBody(requestBody, openapi) {
+  const content = requestBody.content || {};
+  const jsonContent = content['application/json'];
+  if (!jsonContent || !jsonContent.schema) return requestBody;
+  return {
+    ...requestBody,
+    content: {
+      ...content,
+      'application/json': {
+        ...jsonContent,
+        schema: resolveSchema(jsonContent.schema, openapi),
+      },
+    },
+  };
 }
 
 function resolveSchema(schema, openapi, depth = 0) {

@@ -14,7 +14,7 @@
 
 const path = require('path');
 
-function buildGraph({ frontendRoutes, apiCalls, backendSpec, config }) {
+function buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings = [] }) {
   const { routes: backendRoutes, featureFlags, headless } = backendSpec;
 
   // --- 1. Build a map of "which files belong to which frontend route" ---
@@ -69,6 +69,7 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config }) {
       component: data.component || null,
       authGuard: data.authGuard || 'Route',
       requiredScopes: data.requiredScopes || [],
+      staleParse: !!data.staleParse,
       apiCalls: apiCallsAnnotated,
     };
   }
@@ -93,6 +94,7 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config }) {
     featureFlags: featureFlagMap,
     frontendRoutes: frontendRoutesOut,
     blastRadius,
+    warnings,
   };
 }
 
@@ -131,8 +133,9 @@ function buildRouteToApiCallMap(frontendRoutes, apiCalls, config) {
       result[routePath] = {
         component: info.component,
         authGuard: info.authGuard,
-        requiredScopes: info.requiredScopes,
-        apiCallsList: [],
+          requiredScopes: info.requiredScopes,
+          staleParse: !!info.staleParse,
+          apiCallsList: [],
       };
     }
   }
@@ -151,6 +154,7 @@ function buildRouteToApiCallMap(frontendRoutes, apiCalls, config) {
           component: info.component || null,
           authGuard: info.authGuard || 'Route',
           requiredScopes: info.requiredScopes || [],
+          staleParse: !!info.staleParse,
           apiCallsList: [],
         };
       }

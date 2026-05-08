@@ -5,16 +5,25 @@ const { extractRoutes } = require('./route-extractor');
 const { createHttpClient, getAdapter } = require('./backend-fetcher');
 const { buildGraph } = require('./graph-builder');
 const { saveGraph } = require('../cache');
+const { createParseCache } = require('./parse-cache');
 
 async function runAnalyze(config, opts = {}) {
   const spinner = createSpinner();
 
   // 1. Parse frontend source
   spinner.start('Parsing frontend source files...');
+  const warnings = [];
+  const parseCache = createParseCache(config);
   const apiCalls = parseFrontendSrc(config.frontendSrc, {
     apiClientFile: config.apiClientFile,
+    parseCache,
+    warnings,
   });
-  const frontendRoutes = extractRoutes(config.routerFile, config.frontendSrc);
+  const frontendRoutes = extractRoutes(config.routerFile, config.frontendSrc, {
+    parseCache,
+    warnings,
+  });
+  parseCache.save();
   const discoveredClients = (apiCalls.clientNames || []).filter(
     n => !['api', 'apiClient', 'axios', 'client', 'http', 'axiosInstance', 'instance', 'httpClient', 'request', 'fetcher', 'apiV1', 'apiV2'].includes(n)
   );
@@ -48,7 +57,7 @@ async function runAnalyze(config, opts = {}) {
 
   // 3. Build dependency graph
   spinner.start('Building dependency graph...');
-  const graph = buildGraph({ frontendRoutes, apiCalls, backendSpec, config });
+  const graph = buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings });
   spinner.succeed('Dependency graph built');
 
   // 4. Save graph

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { parse } = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
+const { makeParseWarning } = require('./parse-cache');
 
 const PARSE_OPTS = {
   sourceType: 'module',
@@ -123,9 +124,10 @@ function detectDirectApiCall(node, clientNames) {
  * Also picks up the default-export name from the configured apiClientFile
  * and the names of imports that resolve to that file.
  */
-function discoverApiClientNames(srcDir, apiClientFile) {
+function discoverApiClientNames(srcDir, apiClientFile, options = {}) {
   const names = new Set();
   const files = walkDir(srcDir, /\.(j|t)sx?$/);
+  const warnings = options.warnings || [];
 
   for (const file of files) {
     let src;
@@ -133,7 +135,11 @@ function discoverApiClientNames(srcDir, apiClientFile) {
     if (!src.includes('axios.create') && !src.includes('createApi')) continue;
 
     let ast;
-    try { ast = parse(src, PARSE_OPTS); } catch { continue; }
+    try {
+      ast = parseWithCache(file, src, { parseCache: options.parseCache, warnings });
+    } catch {
+      continue;
+    }
 
     traverse(ast, {
       VariableDeclarator(p) {
@@ -215,12 +221,14 @@ function parseFile(filePath, options = {}) {
   const results = [];
   const seenPaths = new Set();
   const clientNames = options.clientNames || DEFAULT_API_CLIENTS;
+  let staleParse = false;
 
   let ast;
   try {
-    ast = parse(src, PARSE_OPTS);
+    ast = parseWithCache(filePath, src, options);
+    staleParse = !!(ast && ast.__qaProbeStaleParse);
+    if (staleParse) delete ast.__qaProbeStaleParse;
   } catch {
-    // Unparseable file — skip silently
     return results;
   }
 
@@ -252,6 +260,7 @@ function parseFile(filePath, options = {}) {
               path: normalized,
               rawPath: hit.path,
               callSite,
+              staleParse,
             });
           }
           break;
@@ -271,18 +280,24 @@ function parseFrontendSrc(srcDir, options = {}) {
   const allFiles = walkDir(srcDir, /\.(j|t)sx?$/);
   const byFile = new Map();
   const allCalls = [];
+  const warnings = options.warnings || [];
 
   // Pre-pass: discover project-specific API client variable names by scanning
   // for axios.create() / createApi() / createClient() factory calls. This means
   // codebases that name their client `apiV2` or `siteApi` get detected without
   // the user having to configure anything.
-  const discovered = discoverApiClientNames(srcDir, options.apiClientFile);
+  const discovered = discoverApiClientNames(srcDir, options.apiClientFile, {
+    parseCache: options.parseCache,
+    warnings,
+  });
   const clientNames = new Set([...DEFAULT_API_CLIENTS, ...discovered]);
 
   for (const file of allFiles) {
     const calls = parseFile(file, {
       relBase: path.resolve(srcDir, '..', '..'),
       clientNames,
+      parseCache: options.parseCache,
+      warnings,
     });
     if (calls.length > 0) {
       byFile.set(file, calls);
@@ -290,7 +305,32 @@ function parseFrontendSrc(srcDir, options = {}) {
     }
   }
 
-  return { byFile, allCalls, clientNames: [...clientNames] };
+  return { byFile, allCalls, clientNames: [...clientNames], warnings };
+}
+
+function parseWithCache(filePath, src, options = {}) {
+  const warnings = options.warnings || [];
+  const parseCache = options.parseCache || null;
+
+  try {
+    const ast = parse(src, PARSE_OPTS);
+    if (parseCache) parseCache.set(src, ast, filePath);
+    return ast;
+  } catch (err) {
+    const warning = makeParseWarning(filePath, err, { staleParse: false });
+    if (parseCache) {
+      const cached = parseCache.get(src);
+      const cachedAst = cached.ast || parseCache.getForFile(filePath);
+      if (cachedAst) {
+        warning.staleParse = true;
+        warnings.push(warning);
+        cachedAst.__qaProbeStaleParse = true;
+        return cachedAst;
+      }
+    }
+    warnings.push(warning);
+    throw err;
+  }
 }
 
 function walkDir(dir, ext) {
@@ -319,6 +359,7 @@ function walkDir(dir, ext) {
 module.exports = {
   parseFrontendSrc,
   parseFile,
+  parseWithCache,
   normalizePath,
   discoverApiClientNames,
   DEFAULT_API_CLIENTS,

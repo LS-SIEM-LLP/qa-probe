@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { parse } = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
+const { makeParseWarning } = require('./parse-cache');
+const { resolveLazyFiles } = require('./lazy-resolver');
 
 const PARSE_OPTS = {
   sourceType: 'module',
@@ -69,6 +71,30 @@ function extractStringValue(node) {
   return null;
 }
 
+function parseRouterSource(filePath, src, options = {}) {
+  const warnings = options.warnings || [];
+  const parseCache = options.parseCache || null;
+  try {
+    const ast = parse(src, PARSE_OPTS);
+    if (parseCache) parseCache.set(src, ast, filePath);
+    return ast;
+  } catch (err) {
+    const warning = makeParseWarning(filePath, err, { staleParse: false });
+    if (parseCache) {
+      const cached = parseCache.get(src);
+      const cachedAst = cached.ast || parseCache.getForFile(filePath);
+      if (cachedAst) {
+        warning.staleParse = true;
+        warnings.push(warning);
+        cachedAst.__qaProbeStaleParse = true;
+        return cachedAst;
+      }
+    }
+    warnings.push(warning);
+    throw err;
+  }
+}
+
 /**
  * Walk an ObjectExpression representing a single route config entry.
  * Recursively processes `children` arrays.
@@ -78,7 +104,7 @@ function extractStringValue(node) {
  * @param {string|null} parentPath - the absolute path of the parent route
  * @param {Map} routes - accumulator
  */
-function walkRouteConfigObject(objNode, parentPath, routes) {
+function walkRouteConfigObject(objNode, parentPath, routes, options = {}) {
   if (!objNode || objNode.type !== 'ObjectExpression') return;
 
   let routePathRaw = null;
@@ -130,6 +156,7 @@ function walkRouteConfigObject(objNode, parentPath, routes) {
       component: componentName || null,
       authGuard: 'Route',
       requiredScopes: [],
+      staleParse: !!options.staleParse,
     });
   }
 
@@ -137,7 +164,7 @@ function walkRouteConfigObject(objNode, parentPath, routes) {
   if (childrenNode && childrenNode.type === 'ArrayExpression') {
     for (const el of childrenNode.elements) {
       if (el && el.type === 'ObjectExpression') {
-        walkRouteConfigObject(el, absolutePath || parentPath, routes);
+        walkRouteConfigObject(el, absolutePath || parentPath, routes, options);
       }
     }
   }
@@ -149,14 +176,17 @@ function walkRouteConfigObject(objNode, parentPath, routes) {
  *   createMemoryRouter([...])
  *   createHashRouter([...])
  */
-function extractRoutesFromObjectConfig(routerFile, srcDir) {
+function extractRoutesFromObjectConfig(routerFile, srcDir, options = {}) {
   const routes = new Map();
   if (!fs.existsSync(routerFile)) return routes;
 
   const src = fs.readFileSync(routerFile, 'utf8');
   let ast;
+  let staleParse = false;
   try {
-    ast = parse(src, PARSE_OPTS);
+    ast = parseRouterSource(routerFile, src, options);
+    staleParse = !!(ast && ast.__qaProbeStaleParse);
+    if (staleParse) delete ast.__qaProbeStaleParse;
   } catch (err) {
     process.stderr.write(`[qa-probe] (objectConfig) Failed to parse ${routerFile}: ${err.message}\n`);
     return routes;
@@ -185,7 +215,7 @@ function extractRoutesFromObjectConfig(routerFile, srcDir) {
 
       for (const el of firstArg.elements) {
         if (el && el.type === 'ObjectExpression') {
-          walkRouteConfigObject(el, null, routes);
+          walkRouteConfigObject(el, null, routes, { staleParse });
         }
       }
     },
@@ -199,14 +229,17 @@ function extractRoutesFromObjectConfig(routerFile, srcDir) {
  *   createRoute({ path: '/...', component: X })
  *   createFileRoute('/path')({ component: X })
  */
-function extractRoutesFromTanStack(routerFile, srcDir) {
+function extractRoutesFromTanStack(routerFile, srcDir, options = {}) {
   const routes = new Map();
   if (!fs.existsSync(routerFile)) return routes;
 
   const src = fs.readFileSync(routerFile, 'utf8');
   let ast;
+  let staleParse = false;
   try {
-    ast = parse(src, PARSE_OPTS);
+    ast = parseRouterSource(routerFile, src, options);
+    staleParse = !!(ast && ast.__qaProbeStaleParse);
+    if (staleParse) delete ast.__qaProbeStaleParse;
   } catch (err) {
     process.stderr.write(`[qa-probe] (tanstack) Failed to parse ${routerFile}: ${err.message}\n`);
     return routes;
@@ -259,6 +292,7 @@ function extractRoutesFromTanStack(routerFile, srcDir) {
               component: componentName || null,
               authGuard: 'Route',
               requiredScopes: [],
+              staleParse,
             });
           }
         }
@@ -316,6 +350,7 @@ function extractRoutesFromTanStack(routerFile, srcDir) {
               component: componentName || null,
               authGuard: 'Route',
               requiredScopes: [],
+              staleParse,
             });
           }
         }
@@ -341,18 +376,25 @@ function extractRoutesFromTanStack(routerFile, srcDir) {
  *
  * Returns Map<routePath, { component, authGuard, requiredScopes }>
  */
-function extractRoutes(routerFile, srcDir) {
+function extractRoutes(routerFile, srcDir, options = {}) {
   if (!fs.existsSync(routerFile)) {
     process.stderr.write(`[qa-probe] Router file not found: ${routerFile}\n`);
     return new Map();
   }
+  const lazyVisited = options.lazyVisited || new Set();
+  const resolvedRouterFile = path.resolve(routerFile);
+  if (lazyVisited.has(resolvedRouterFile)) return new Map();
+  lazyVisited.add(resolvedRouterFile);
 
   const src = fs.readFileSync(routerFile, 'utf8');
   const routes = new Map();
 
   let ast;
+  let staleParse = false;
   try {
-    ast = parse(src, PARSE_OPTS);
+    ast = parseRouterSource(routerFile, src, options);
+    staleParse = !!(ast && ast.__qaProbeStaleParse);
+    if (staleParse) delete ast.__qaProbeStaleParse;
   } catch (err) {
     process.stderr.write(`[qa-probe] Failed to parse router file: ${err.message}\n`);
     return routes;
@@ -388,6 +430,8 @@ function extractRoutes(routerFile, srcDir) {
           const expr = val.expression;
           if (expr.type === 'StringLiteral') {
             attrs[attrName] = expr.value;
+          } else if (expr.type === 'JSXElement') {
+            attrs[attrName] = resolveJsxComponentName(expr);
           } else if (expr.type === 'ArrayExpression') {
             attrs[attrName] = expr.elements
               .filter(e => e && e.type === 'StringLiteral')
@@ -434,13 +478,14 @@ function extractRoutes(routerFile, srcDir) {
           component: component || null,
           authGuard: isAuthGuard ? componentName : 'Route',
           requiredScopes,
+          staleParse,
         });
       }
     },
   });
 
   // --- Strategy 2: createBrowserRouter / createMemoryRouter / createHashRouter ---
-  const objectConfigRoutes = extractRoutesFromObjectConfig(routerFile, srcDir);
+  const objectConfigRoutes = extractRoutesFromObjectConfig(routerFile, srcDir, options);
   for (const [p, info] of objectConfigRoutes) {
     if (!routes.has(p)) {
       routes.set(p, info);
@@ -448,14 +493,31 @@ function extractRoutes(routerFile, srcDir) {
   }
 
   // --- Strategy 3: TanStack Router createRoute / createFileRoute ---
-  const tanstackRoutes = extractRoutesFromTanStack(routerFile, srcDir);
+  const tanstackRoutes = extractRoutesFromTanStack(routerFile, srcDir, options);
   for (const [p, info] of tanstackRoutes) {
     if (!routes.has(p)) {
       routes.set(p, info);
     }
   }
 
+  const lazyFiles = resolveLazyFiles(routerFile, {
+    frontendSrc: srcDir,
+    warnings: options.warnings || [],
+    maxDepth: 5,
+  });
+  for (const lazyFile of lazyFiles) {
+    const lazyRoutes = extractRoutes(lazyFile, srcDir, {
+      ...options,
+      lazyVisited,
+    });
+    for (const [p, info] of lazyRoutes) {
+      if (!routes.has(p)) {
+        routes.set(p, { ...info, lazyResolved: true });
+      }
+    }
+  }
+
   return routes;
 }
 
-module.exports = { extractRoutes, extractRoutesFromObjectConfig, extractRoutesFromTanStack };
+module.exports = { extractRoutes, extractRoutesFromObjectConfig, extractRoutesFromTanStack, parseRouterSource };
