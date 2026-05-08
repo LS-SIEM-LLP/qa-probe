@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.0] - 2026-05-08
+
+### Added
+
+- `qa-probe fix` command for dry-run remediation diffs and high-confidence apply mode.
+- Auto-remediation strategies for contract mismatches, disabled feature flags, and empty data findings.
+- Contract mismatch trailing-slash fixes with confidence scoring.
+
+---
+
 ## [1.4.0] - 2026-05-08
 
 ### Added
