@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.0] - 2026-05-09
+
+### Added
+
+- GraphQL introspection adapter that maps queries and mutations into QA Probe endpoints.
+- tRPC router adapter that extracts query, mutation, and subscription procedures from router files.
+- Config support for `framework: graphql` and `framework: trpc` with adapter-specific options.
+
+---
+
 ## [2.2.0] - 2026-05-09
 
 ### Added
