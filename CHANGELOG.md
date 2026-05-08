@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.1.0] - 2026-05-09
+
+### Added
+
+- HAR replay support for safe POST request bodies via `postBodyMode: har`.
+- Deterministic HAR anonymization for SSN, email, phone, credit card, and UUID values.
+- HAR endpoint matching with OpenAPI-style path parameters.
+
+---
+
 ## [2.0.0] - 2026-05-09
 
 ### Added
