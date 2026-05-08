@@ -6,6 +6,7 @@
  * Input:
  *   frontendRoutes: Map<routePath, { component, authGuard, requiredScopes }>
  *   apiCalls: { byFile: Map<file, calls[]>, allCalls: calls[] }
+ *   runtimeCalls: Map<routePath, calls[]>
  *   backendSpec: { routes, featureFlags, headless }
  *   config: validated config
  *
@@ -14,7 +15,7 @@
 
 const path = require('path');
 
-function buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings = [] }) {
+function buildGraph({ frontendRoutes, apiCalls, runtimeCalls = null, runtimeDomSnapshots = null, backendSpec, config, warnings = [] }) {
   const { routes: backendRoutes, featureFlags, headless } = backendSpec;
 
   // --- 1. Build a map of "which files belong to which frontend route" ---
@@ -25,6 +26,7 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings = 
   // We look at the file path and match it to the route path.
 
   const routeApiCallMap = buildRouteToApiCallMap(frontendRoutes, apiCalls, config);
+  mergeRuntimeCalls(routeApiCallMap, runtimeCalls, frontendRoutes);
 
   // --- 2. For each api call, find the matching backend route ---
   const prefix = config.frontendApiPrefix || '/api';
@@ -62,6 +64,7 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings = 
         matchedBackendRoute: matchKey || null,
         callSite: call.callSite,
         rawPath: call.rawPath,
+        source: call.source || 'ast',
       };
     });
 
@@ -89,13 +92,43 @@ function buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings = 
       baseUrl: config.baseUrl,
       headless,
       frontendApiPrefix: prefix,
+      runtimeTracing: !!runtimeCalls,
     },
     backendRoutes,
     featureFlags: featureFlagMap,
     frontendRoutes: frontendRoutesOut,
     blastRadius,
     warnings,
+    runtimeDomSnapshots: runtimeDomSnapshots || undefined,
   };
+}
+
+function mergeRuntimeCalls(routeApiCallMap, runtimeCalls, frontendRoutes) {
+  if (!runtimeCalls) return;
+
+  for (const [routePath, calls] of runtimeCalls.entries()) {
+    if (!routeApiCallMap[routePath]) {
+      const routeInfo = frontendRoutes.get(routePath) || {};
+      routeApiCallMap[routePath] = {
+        component: routeInfo.component || null,
+        authGuard: routeInfo.authGuard || 'Route',
+        requiredScopes: routeInfo.requiredScopes || [],
+        staleParse: !!routeInfo.staleParse,
+        apiCallsList: [],
+      };
+    }
+
+    for (const call of calls || []) {
+      const existing = routeApiCallMap[routePath].apiCallsList.find(item =>
+        item.method === call.method && item.path === call.path
+      );
+      if (existing) {
+        existing.source = existing.source === 'runtime' ? 'runtime' : 'both';
+      } else {
+        routeApiCallMap[routePath].apiCallsList.push({ ...call, source: 'runtime' });
+      }
+    }
+  }
 }
 
 /**
@@ -177,7 +210,7 @@ function buildRouteToApiCallMap(frontendRoutes, apiCalls, config) {
         if (!result['__unmatched__']) {
           result['__unmatched__'] = { component: null, authGuard: null, requiredScopes: [], apiCallsList: [] };
         }
-        result['__unmatched__'].apiCallsList.push(call);
+        result['__unmatched__'].apiCallsList.push({ ...call, source: call.source || 'ast' });
       }
     }
   }
@@ -271,4 +304,4 @@ function findFeatureFlag(routePath, featureFlags) {
   return null;
 }
 
-module.exports = { buildGraph };
+module.exports = { buildGraph, mergeRuntimeCalls };

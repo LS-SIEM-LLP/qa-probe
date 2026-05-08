@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.0] - 2026-05-08
+
+### Added
+
+- Opt-in CDP runtime tracing during analyze via `analyze.runtime.enabled`.
+- Playwright-backed runtime driver that observes browser network requests and captures DOM snapshots.
+- Runtime-discovered API calls merged into `graph.json` with `source: runtime`; duplicate AST/runtime calls are tagged `source: both`.
+- Runtime navigation failures are emitted as warnings without aborting analyze.
+
+---
+
 ## [1.1.0] - 2026-05-08
 
 ### Added

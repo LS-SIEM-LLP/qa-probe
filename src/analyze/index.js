@@ -6,6 +6,7 @@ const { createHttpClient, getAdapter } = require('./backend-fetcher');
 const { buildGraph } = require('./graph-builder');
 const { saveGraph } = require('../cache');
 const { createParseCache } = require('./parse-cache');
+const { traceRuntimeRoutes } = require('./runtime-tracer');
 
 async function runAnalyze(config, opts = {}) {
   const spinner = createSpinner();
@@ -29,6 +30,14 @@ async function runAnalyze(config, opts = {}) {
   );
   const clientNote = discoveredClients.length > 0 ? ` (auto-detected clients: ${discoveredClients.join(', ')})` : '';
   spinner.succeed(`Frontend: ${frontendRoutes.size} routes, ${apiCalls.allCalls.length} API calls found${clientNote}`);
+
+  let runtimeTrace = null;
+  if (config.analyze && config.analyze.runtime && config.analyze.runtime.enabled) {
+    spinner.start('Tracing frontend runtime network requests...');
+    runtimeTrace = await traceRuntimeRoutes(frontendRoutes, config, { warnings });
+    const runtimeCount = [...runtimeTrace.runtimeCalls.values()].reduce((sum, calls) => sum + calls.length, 0);
+    spinner.succeed(`Runtime tracing: ${runtimeCount} API request(s) observed`);
+  }
 
   // 2. Fetch backend spec (or headless)
   let backendSpec;
@@ -57,7 +66,15 @@ async function runAnalyze(config, opts = {}) {
 
   // 3. Build dependency graph
   spinner.start('Building dependency graph...');
-  const graph = buildGraph({ frontendRoutes, apiCalls, backendSpec, config, warnings });
+  const graph = buildGraph({
+    frontendRoutes,
+    apiCalls,
+    runtimeCalls: runtimeTrace && runtimeTrace.runtimeCalls,
+    runtimeDomSnapshots: runtimeTrace && runtimeTrace.domSnapshots,
+    backendSpec,
+    config,
+    warnings,
+  });
   spinner.succeed('Dependency graph built');
 
   // 4. Save graph

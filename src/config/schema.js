@@ -27,6 +27,22 @@ const WsSchema = z.object({
   paths: z.array(z.string()).default([]),
 });
 
+const AnalyzeRuntimeSchema = z.object({
+  enabled: z.boolean().default(false),
+  browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
+  baseUrl: z.string().url().optional(),
+  viewport: z.object({
+    width: z.number().default(1280),
+    height: z.number().default(720),
+  }).default({}),
+  navigationTimeoutMs: z.number().default(30000),
+  captureWindowMs: z.number().default(5000),
+});
+
+const AnalyzeSchema = z.object({
+  runtime: AnalyzeRuntimeSchema.default({}),
+});
+
 const ProbeSchema = z.object({
   concurrency: z.number().default(5),
   delayMs: z.number().default(50),
@@ -75,6 +91,7 @@ const ConfigSchema = z.object({
   auth: AuthSchema.default({}),
 
   // Probe behavior
+  analyze: AnalyzeSchema.default({}),
   probe: ProbeSchema.default({}),
 
   // Scoring
