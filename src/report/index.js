@@ -269,6 +269,9 @@ function displayCause(rootCause) {
     slow_but_working: 'slow_but_working',
     slow_app: 'slow_app',
     slow_dependency: 'slow_dependency',
+    privilege_escalation: 'privilege_escalation',
+    pii_leak: 'pii_leak',
+    auth_bypass: 'auth_bypass',
     feature_flag_disabled: 'feature_flag_disabled',
     sample_not_found: 'sample_not_found',
     invalid_sample_params: 'invalid_sample',
@@ -290,6 +293,9 @@ function severityFor(rootCause) {
     case 'field_renamed':
     case 'data_received_not_rendered':
     case 'stream_dead':
+    case 'privilege_escalation':
+    case 'pii_leak':
+    case 'auth_bypass':
       return 'high';
     case 'feature_flag_disabled':
     case 'slow_but_working':
