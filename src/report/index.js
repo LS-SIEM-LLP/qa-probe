@@ -267,6 +267,8 @@ function displayCause(rootCause) {
     data_received_not_rendered: 'data_received_not_rendered',
     stream_dead: 'stream_dead',
     slow_but_working: 'slow_but_working',
+    slow_app: 'slow_app',
+    slow_dependency: 'slow_dependency',
     feature_flag_disabled: 'feature_flag_disabled',
     sample_not_found: 'sample_not_found',
     invalid_sample_params: 'invalid_sample',
@@ -291,6 +293,8 @@ function severityFor(rootCause) {
       return 'high';
     case 'feature_flag_disabled':
     case 'slow_but_working':
+    case 'slow_app':
+    case 'slow_dependency':
     case 'unknown':
     case 'sample_not_found':
     case 'invalid_sample_params':

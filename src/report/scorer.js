@@ -62,8 +62,10 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
         penalties.push({ probeKey, reason: 'server_error', delta: weights.serverError || -40 });
         break;
       case 'slow_but_working':
+      case 'slow_app':
+      case 'slow_dependency':
         score += (weights.slowResponse || -10);
-        penalties.push({ probeKey, reason: 'slow_but_working', delta: weights.slowResponse || -10 });
+        penalties.push({ probeKey, reason: rootCause, delta: weights.slowResponse || -10 });
         break;
       case 'sample_not_found':
       case 'invalid_sample_params':

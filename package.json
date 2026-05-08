@@ -1,6 +1,6 @@
 {
   "name": "qa-probe",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Local QA agent — maps frontend routes to backend API calls, probes every endpoint live, scores pages 0–100, explains why data is missing. Works with any FastAPI/Express/Next.js app.",
   "license": "Apache-2.0",
   "type": "commonjs",

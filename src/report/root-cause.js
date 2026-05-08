@@ -19,7 +19,7 @@
  * 12. invalid_sample_params  — 400/422 from generated sample params/query
  * 13. sample_not_found       — 404 on a known templated backend route
  * 14. timeout                — request timed out/aborted
- * 15. slow_but_working       — 200 + ms > 80% of timeout
+ * 15. slow_app/slow_dependency — 200 + ms > 80% of timeout
  * 16. ok                     — everything else
  */
 
@@ -168,13 +168,27 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
       };
     }
 
-    // --- Rule 9: slow_but_working ---
+    // --- Rule 9: slow_app / slow_dependency ---
     const timeout = (config && config.probe && config.probe.timeoutMs) || 10000;
     if (ms > timeout * 0.8) {
+      if (probeResult.otel && probeResult.otel.classification === 'slow_dependency') {
+        return {
+          rootCause: 'slow_dependency',
+          rootCauseDetail: `${endpointKey} -> downstream ${probeResult.otel.slowComponent || 'dependency'} dominated trace time`,
+          fixHint: `Investigate downstream operation ${probeResult.otel.slowComponent || 'dependency'} before tuning app code.`,
+        };
+      }
+      if (probeResult.otel && probeResult.otel.classification === 'slow_app') {
+        return {
+          rootCause: 'slow_app',
+          rootCauseDetail: `${endpointKey} -> application self-time dominated trace latency`,
+          fixHint: 'Profile handler code, query planning, and serialization inside the application span.',
+        };
+      }
       return {
-        rootCause: 'slow_but_working',
+        rootCause: 'slow_app',
         rootCauseDetail: `${endpointKey} → 200 but took ${ms}ms (${Math.round((ms / timeout) * 100)}% of timeout)`,
-        fixHint: 'Consider adding a database index or query result caching.',
+        fixHint: 'No trace correlation was available. Profile app code and dependencies to locate the slow span.',
       };
     }
 

@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.6.0] - 2026-05-08
+
+### Added
+
+- Optional OpenTelemetry trace correlation with W3C `traceparent` injection.
+- Jaeger, Tempo, and Honeycomb trace fetcher modules.
+- `slow_app` and `slow_dependency` root-cause classifications for slow successful probes.
+
+---
+
 ## [1.5.0] - 2026-05-08
 
 ### Added
