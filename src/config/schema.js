@@ -34,6 +34,8 @@ const ProbeSchema = z.object({
   ignoreHTTPSErrors: z.boolean().default(false),
   skipPaths: z.array(z.string()).default(['^/auth/', '^/health/', '^/openapi', '^/docs']),
   safePosts: z.array(z.string()).default([]),
+  postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example']).default('minimal'),
+  postBodyOverrides: z.record(z.enum(['empty', 'minimal', 'realistic', 'example'])).default({}),
   pathParamValues: z.record(z.string()).default({ id: '1' }),
   sse: SseSchema.default({}),
   ws: WsSchema.default({}),

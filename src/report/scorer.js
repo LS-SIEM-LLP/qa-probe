@@ -47,8 +47,11 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
         penalties.push({ probeKey, reason: 'auth_scope_mismatch', delta: weights.authError || -30 });
         break;
       case 'schema_mismatch':
+      case 'type_mismatch':
+      case 'missing_required_field':
+      case 'field_renamed':
         score += (weights.schemaMismatch || -25);
-        penalties.push({ probeKey, reason: 'schema_mismatch', delta: weights.schemaMismatch || -25 });
+        penalties.push({ probeKey, reason: rootCause, delta: weights.schemaMismatch || -25 });
         break;
       case 'stream_dead':
         score += (weights.streamDead || -35);

@@ -1,6 +1,8 @@
 'use strict';
 
 const { validateSchema } = require('./schema-validator');
+const { generateBody, resolvePostBodyMode, requestBodySchema } = require('./body-generator');
+const { inferShape } = require('./schema-history');
 
 const MAX_RETRIES = 2;
 
@@ -14,10 +16,17 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
 
   let result;
   try {
+    const routeInfo = routeKey && graph.backendRoutes ? graph.backendRoutes[routeKey] : null;
+    const bodyMode = resolvePostBodyMode(endpoint, config);
+    const requestSchema = requestBodySchema(routeInfo);
+    const requestBody = ['POST', 'PUT', 'PATCH'].includes(method)
+      ? generateBody(endpoint, requestSchema, bodyMode)
+      : undefined;
     const res = await http.request({
       method: method.toLowerCase(),
       url: endpointPath,
       headers,
+      data: requestBody,
       // Accept JSON and event-stream (for endpoints that might be either)
       validateStatus: () => true,
     });
@@ -65,11 +74,11 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     // Schema validation
     let schemaValid = null;
     let schemaErrors = [];
-    if (res.status === 200 && routeKey && graph.backendRoutes) {
-      const routeInfo = graph.backendRoutes[routeKey];
+    let validation = null;
+    if (res.status === 200 && routeInfo) {
       if (routeInfo && routeInfo.responseSchema) {
         const bodyForValidation = Array.isArray(body) ? body : body;
-        const validation = validateSchema(bodyForValidation, routeInfo.responseSchema);
+        validation = validateSchema(bodyForValidation, routeInfo.responseSchema);
         schemaValid = validation.valid;
         schemaErrors = validation.errors;
       }
@@ -84,6 +93,9 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       emptyReason,
       schemaValid,
       schemaErrors,
+      validation: validation ? { ok: validation.ok, errors: validation.errors } : null,
+      responseShape: res.status === 200 ? inferShape(body) : null,
+      requestBodyMode: requestBody === undefined ? 'empty' : bodyMode,
       contentType: res.headers['content-type'] || null,
       retries: attempt,
     };
