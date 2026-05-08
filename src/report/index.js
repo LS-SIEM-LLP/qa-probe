@@ -54,6 +54,14 @@ async function runReport(graph, probeResults, config) {
     if (!rootCauseSummary[rc]) rootCauseSummary[rc] = { count: 0, affectedRoutes: [] };
     rootCauseSummary[rc].count++;
 
+    if (endpointKey.startsWith('VISUAL ')) {
+      const routePath = endpointKey.slice('VISUAL '.length);
+      if (!rootCauseSummary[rc].affectedRoutes.includes(routePath)) {
+        rootCauseSummary[rc].affectedRoutes.push(routePath);
+      }
+      continue;
+    }
+
     // Find which frontend routes call this endpoint
     for (const [routePath, routeData] of Object.entries(graph.frontendRoutes || {})) {
       const calls = routeData.apiCalls || [];
@@ -89,10 +97,20 @@ async function runReport(graph, probeResults, config) {
       }
     }
 
+    const visualKey = `VISUAL ${routePath}`;
+    const visualCause = endpointRootCauses[visualKey];
+    if (visualCause && visualCause.rootCause !== 'ok') {
+      worstCause = visualCause.rootCause;
+      worstDetail = visualCause.rootCauseDetail;
+      fixHint = visualCause.fixHint;
+      scored.score = Math.min(scored.score, 60);
+      scored.status = scored.score >= 80 ? 'healthy' : scored.score >= 50 ? 'degraded' : 'broken';
+    }
+
     routesOut[routePath] = {
       score: scored.score,
       status: scored.status,
-      rootCause: scored.primaryCause || worstCause || 'ok',
+      rootCause: (scored.primaryCause && scored.primaryCause !== 'ok') ? scored.primaryCause : worstCause || 'ok',
       rootCauseDetail: worstDetail,
       fixHint,
       apiCallCount: apiCalls.length,
@@ -218,6 +236,9 @@ function buildEndpointRouteIndex(graph) {
       if (!index[endpointKey]) index[endpointKey] = [];
       if (!index[endpointKey].includes(routePath)) index[endpointKey].push(routePath);
     }
+    const visualKey = `VISUAL ${routePath}`;
+    if (!index[visualKey]) index[visualKey] = [];
+    if (!index[visualKey].includes(routePath)) index[visualKey].push(routePath);
   }
   return index;
 }
@@ -233,6 +254,7 @@ function displayCause(rootCause) {
     type_mismatch: 'type_mismatch',
     missing_required_field: 'missing_required_field',
     field_renamed: 'field_renamed',
+    data_received_not_rendered: 'data_received_not_rendered',
     stream_dead: 'stream_dead',
     slow_but_working: 'slow_but_working',
     feature_flag_disabled: 'feature_flag_disabled',
@@ -254,6 +276,7 @@ function severityFor(rootCause) {
     case 'type_mismatch':
     case 'missing_required_field':
     case 'field_renamed':
+    case 'data_received_not_rendered':
     case 'stream_dead':
       return 'high';
     case 'feature_flag_disabled':
@@ -276,6 +299,7 @@ function confidenceFor(rootCause, probe) {
   if (rootCause === 'sample_not_found') return 'high';
   if (rootCause === 'invalid_sample_params') return 'medium';
   if (rootCause === 'timeout') return 'medium';
+  if (rootCause === 'data_received_not_rendered') return 'high';
   if (probe && probe.status === null) return 'medium';
   return 'high';
 }

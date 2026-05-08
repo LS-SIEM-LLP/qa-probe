@@ -13,13 +13,14 @@
  *  6. type_mismatch          — 200 + data present + wrong field type
  *  7. missing_required_field — 200 + data present + required field absent
  *  8. field_renamed          — 200 + bidirectional drift indicates rename
- *  9. stream_dead            — SSE/WS connected=false OR no first event/frame
- * 10. server_error           — 5xx
- * 11. invalid_sample_params  — 400/422 from generated sample params/query
- * 12. sample_not_found       — 404 on a known templated backend route
- * 13. timeout                — request timed out/aborted
- * 14. slow_but_working       — 200 + ms > 80% of timeout
- * 15. ok                     — everything else
+ *  9. data_received_not_rendered — HTTP healthy but visual density is low
+ * 10. stream_dead            — SSE/WS connected=false OR no first event/frame
+ * 11. server_error           — 5xx
+ * 12. invalid_sample_params  — 400/422 from generated sample params/query
+ * 13. sample_not_found       — 404 on a known templated backend route
+ * 14. timeout                — request timed out/aborted
+ * 15. slow_but_working       — 200 + ms > 80% of timeout
+ * 16. ok                     — everything else
  */
 
 const DISABLED_FEATURE_MAX_MS = 15; // 404 at <15ms → flag disabled
@@ -28,6 +29,18 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   if (!probeResult) return { rootCause: 'not_probed', rootCauseDetail: null, fixHint: null };
 
   const { status, ms, empty, schemaErrors, type, connected, error, routeKey } = probeResult;
+
+  if (type === 'visual') {
+    const threshold = probeResult.densityThreshold === undefined ? 0.10 : probeResult.densityThreshold;
+    if (probeResult.httpScore >= 80 && probeResult.density < threshold) {
+      return {
+        rootCause: 'data_received_not_rendered',
+        rootCauseDetail: `${probeResult.routePath || endpointKey} → HTTP score ${probeResult.httpScore}, visual density ${probeResult.density.toFixed(3)} below ${threshold}`,
+        fixHint: 'Check component render: data fetched but not rendered. Common causes: prop name mismatch, missing key prop, error boundary swallow.',
+      };
+    }
+    return { rootCause: 'ok', rootCauseDetail: null, fixHint: null };
+  }
 
   // --- Rule 7: stream_dead (SSE/WS) ---
   if (type === 'sse' || type === 'ws') {
