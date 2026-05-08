@@ -16,11 +16,11 @@ function saveToHistory(report, config) {
   const histDir = getHistoryDir(config);
   ensureDir(histDir);
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const timestamp = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.hrtime.bigint()}`;
   const file = path.join(histDir, `run-${timestamp}.json`);
   writeJson(file, report);
 
-  pruneHistory(histDir, config.output.keepHistory || 10);
+  pruneHistory(histDir, config.output.keepHistory || 30);
 }
 
 function pruneHistory(histDir, keepCount) {
@@ -51,4 +51,17 @@ function loadPreviousRun(config) {
   return readJson(path.join(histDir, files[0]));
 }
 
-module.exports = { saveToHistory, loadPreviousRun };
+function loadRecentRuns(config, limit = 30) {
+  const histDir = getHistoryDir(config);
+  if (!fs.existsSync(histDir)) return [];
+  return fs.readdirSync(histDir)
+    .filter(f => f.endsWith('.json'))
+    .sort()
+    .reverse()
+    .slice(0, limit)
+    .map(f => readJson(path.join(histDir, f)))
+    .filter(Boolean)
+    .reverse();
+}
+
+module.exports = { saveToHistory, loadPreviousRun, loadRecentRuns, pruneHistory };

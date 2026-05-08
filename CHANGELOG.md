@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.8.0] - 2026-05-08
+
+### Added
+
+- Cross-run baseline computation for latency, response size, and response cardinality.
+- Anomaly detection for current probe results outside historical ranges.
+- `anomaly_vs_baseline` root-cause classification and historical fix suggestion helper.
+
+---
+
 ## [1.7.0] - 2026-05-08
 
 ### Added
