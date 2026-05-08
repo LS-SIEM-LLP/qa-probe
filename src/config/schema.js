@@ -65,8 +65,20 @@ const AnalyzeRuntimeSchema = z.object({
   captureWindowMs: z.number().default(5000),
 });
 
+const LlmRepairSchema = z.object({
+  enabled: z.boolean().default(false),
+  provider: z.enum(['disabled', 'openai', 'anthropic', 'ollama']).default('disabled'),
+  endpoint: z.string().optional(),
+  apiKey: z.string().optional(),
+  model: z.string().optional(),
+  maxFileBytes: z.number().default(50000),
+  maxLineDelta: z.number().default(5),
+  maxCharDelta: z.number().default(200),
+});
+
 const AnalyzeSchema = z.object({
   runtime: AnalyzeRuntimeSchema.default({}),
+  llmRepair: LlmRepairSchema.default({}),
 });
 
 const ProbeSchema = z.object({
