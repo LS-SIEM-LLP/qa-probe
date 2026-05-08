@@ -9,6 +9,7 @@ const { runConcurrent } = require('./rate-limiter');
 const { createHttpClient } = require('../analyze/backend-fetcher');
 const { saveProbeResults } = require('../cache');
 const { snapshotSchemas } = require('./schema-history');
+const { runVisualProbe } = require('./visual-probe');
 
 async function runProbe(graph, config) {
   const http = createHttpClient(config);
@@ -77,7 +78,22 @@ async function runProbe(graph, config) {
     spinner.succeed(`WS: ${wsEndpoints.length} endpoint(s) checked`);
   }
 
-  // 7. Save results
+  // 7. Visual probing
+  if (config.probe.visual && config.probe.visual.enabled) {
+    spinner.start('Running visual probe...');
+    const visual = await runVisualProbe(graph, results, config);
+    Object.assign(results, visual.syntheticResults);
+    results.__visual = {
+      routes: visual.routeResults,
+      warnings: visual.warnings,
+    };
+    const issueCount = Object.values(visual.routeResults).filter(item =>
+      item.httpScore >= 80 && item.density < item.densityThreshold
+    ).length;
+    spinner.succeed(`Visual probe: ${Object.keys(visual.routeResults).length} route(s), ${issueCount} low-density issue(s)`);
+  }
+
+  // 8. Save results
   const schemaDrift = snapshotSchemas(results, config);
   if (schemaDrift.length > 0) {
     results.__schemaDrift = schemaDrift;

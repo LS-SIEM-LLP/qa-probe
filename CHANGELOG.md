@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.0] - 2026-05-08
+
+### Added
+
+- Opt-in visual probe via `probe.visual.enabled` with viewport and density threshold controls.
+- Layout density analysis for rendered text, images, and non-empty containers.
+- `data_received_not_rendered` diagnosis for healthy HTTP routes that render as blank or sparse pages.
+
+---
+
 ## [1.2.0] - 2026-05-08
 
 ### Added

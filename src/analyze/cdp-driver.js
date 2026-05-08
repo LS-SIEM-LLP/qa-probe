@@ -1,5 +1,7 @@
 'use strict';
 
+const { computeDensityFromPage } = require('../probe/layout-density');
+
 function createCdpDriver(runtimeConfig = {}) {
   let playwright;
   try {
@@ -74,6 +76,35 @@ function createCdpDriver(runtimeConfig = {}) {
         }
 
         return { requests, domSnapshot };
+      } finally {
+        await context.close();
+      }
+    },
+
+    async captureRoute(url, options = {}) {
+      const browser = await getBrowser();
+      const viewport = options.viewport || runtimeConfig.viewport || { width: 1280, height: 720 };
+      const context = await browser.newContext({
+        viewport,
+        ignoreHTTPSErrors: !!runtimeConfig.ignoreHTTPSErrors,
+      });
+      const page = await context.newPage();
+
+      try {
+        await page.goto(url, {
+          waitUntil: 'networkidle',
+          timeout: options.navigationTimeoutMs || runtimeConfig.navigationTimeoutMs || 30000,
+        });
+        const density = await computeDensityFromPage(page);
+        let screenshotPath = null;
+        if (options.screenshotPath) {
+          screenshotPath = options.screenshotPath;
+          await page.screenshot({
+            path: screenshotPath,
+            fullPage: false,
+          });
+        }
+        return { density, screenshotPath };
       } finally {
         await context.close();
       }

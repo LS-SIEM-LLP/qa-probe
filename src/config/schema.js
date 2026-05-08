@@ -27,6 +27,14 @@ const WsSchema = z.object({
   paths: z.array(z.string()).default([]),
 });
 
+const VisualProbeSchema = z.object({
+  enabled: z.boolean().default(false),
+  viewportWidth: z.number().default(1280),
+  viewportHeight: z.number().default(720),
+  densityThreshold: z.number().default(0.10),
+  navigationTimeoutMs: z.number().default(30000),
+});
+
 const AnalyzeRuntimeSchema = z.object({
   enabled: z.boolean().default(false),
   browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
@@ -55,6 +63,7 @@ const ProbeSchema = z.object({
   pathParamValues: z.record(z.string()).default({ id: '1' }),
   sse: SseSchema.default({}),
   ws: WsSchema.default({}),
+  visual: VisualProbeSchema.default({}),
 });
 
 const ScoringSchema = z.object({
