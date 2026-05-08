@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.0] - 2026-05-09
+
+### Added
+
+- Optional Schemathesis runner configuration for OpenAPI fuzz checks.
+- Schemathesis JSON parser that maps failures into `validation_edge_case` findings.
+- Root-cause classification for validation edge cases and offending payload hints.
+
+---
+
 ## [2.1.0] - 2026-05-09
 
 ### Added

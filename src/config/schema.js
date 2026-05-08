@@ -59,6 +59,13 @@ const HarReplaySchema = z.object({
   anonymize: z.boolean().default(true),
 });
 
+const SchemathesisSchema = z.object({
+  enabled: z.boolean().default(false),
+  command: z.string().default('schemathesis'),
+  timeoutMs: z.number().default(300000),
+  hypothesisExamples: z.number().default(50),
+});
+
 const AnalyzeRuntimeSchema = z.object({
   enabled: z.boolean().default(false),
   browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
@@ -104,6 +111,7 @@ const ProbeSchema = z.object({
   personas: z.array(PersonaSchema).default([]),
   security: SecuritySchema.default({}),
   harReplay: HarReplaySchema.default({}),
+  schemathesis: SchemathesisSchema.default({}),
 });
 
 const ScoringSchema = z.object({
