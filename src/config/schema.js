@@ -83,6 +83,15 @@ const OutputSchema = z.object({
   formats: z.array(z.enum(['json', 'markdown', 'ai-context', 'html'])).default(['json', 'markdown', 'ai-context', 'html']),
 });
 
+const ReportCoverageSchema = z.object({
+  enabled: z.boolean().default(true),
+  ignoreEndpointGlobs: z.array(z.string()).default([]),
+});
+
+const ReportSchema = z.object({
+  coverage: ReportCoverageSchema.default({}),
+});
+
 const ConfigSchema = z.object({
   // Target
   baseUrl: z.string().url('baseUrl must be a valid URL'),
@@ -108,6 +117,9 @@ const ConfigSchema = z.object({
 
   // Output
   output: OutputSchema.default({}),
+
+  // Report add-ons
+  report: ReportSchema.default({}),
 
   // Optional: shell command to seed the database. Shown in empty_db fix hints.
   // Example: 'docker exec api python scripts/seed.py'

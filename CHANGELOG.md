@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.4.0] - 2026-05-08
+
+### Added
+
+- Coverage analytics report generation via `coverage.md`.
+- Dead endpoint detection for OpenAPI routes with no frontend references, with configurable ignore globs.
+- Dead component and orphaned response-field analytics for frontend/API cleanup.
+
+---
+
 ## [1.3.0] - 2026-05-08
 
 ### Added
