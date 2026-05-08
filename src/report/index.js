@@ -8,6 +8,8 @@ const { writeJsonReport } = require('./formatters/json');
 const { writeMarkdownReport } = require('./formatters/markdown');
 const { writeAiContext } = require('./formatters/ai-context');
 const { writeHtmlReport } = require('./formatters/html');
+const { writeCoverageMarkdown } = require('./formatters/coverage-md');
+const { generateCoverage } = require('./coverage');
 const { saveReport } = require('../cache');
 const { loadPreviousRun, saveToHistory } = require('../cache/history');
 
@@ -45,6 +47,12 @@ async function runReport(graph, probeResults, config) {
   // route scores answer "is my page healthy?", diagnostics answer "what did
   // qa-probe actually observe on the wire?"
   const endpointDiagnostics = buildEndpointDiagnostics(graph, effectiveProbeResults, endpointRootCauses);
+  const coverageEnabled = !config.report ||
+    !config.report.coverage ||
+    config.report.coverage.enabled !== false;
+  const coverage = coverageEnabled
+    ? generateCoverage(graph, effectiveProbeResults, config)
+    : null;
 
   // 4. Root cause summary (aggregate by type)
   const rootCauseSummary = {};
@@ -130,6 +138,7 @@ async function runReport(graph, probeResults, config) {
     rootCauseSummary,
     blastRadius,
     endpointDiagnostics,
+    coverage,
     clusters,
     regression: null,
     parseWarnings: graph.warnings || [],
@@ -149,6 +158,7 @@ async function runReport(graph, probeResults, config) {
   if (formats.includes('markdown')) writeMarkdownReport(report, config);
   if (formats.includes('ai-context')) writeAiContext(report, graph, config);
   if (formats.includes('html')) writeHtmlReport(report, config);
+  if (coverage) writeCoverageMarkdown(coverage, config);
 
   spinner.succeed(`Reports written to ${config.output.dir}/`);
 
