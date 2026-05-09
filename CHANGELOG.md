@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.0.0] - 2026-05-09
+
+### Added
+
+- Opt-in LLM-assisted parser repair for analysis-only syntax recovery.
+- Disabled, OpenAI, Anthropic, and Ollama provider slots with conservative guardrails.
+- Route/API call metadata showing `parsedVia: llm-repair` and the configured provider.
+
+---
+
 ## [1.8.0] - 2026-05-08
 
 ### Added

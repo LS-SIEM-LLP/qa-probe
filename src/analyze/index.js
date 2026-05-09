@@ -19,6 +19,7 @@ async function runAnalyze(config, opts = {}) {
     apiClientFile: config.apiClientFile,
     parseCache,
     warnings,
+    llmRepair: config.analyze && config.analyze.llmRepair,
   });
   const frontendRoutes = extractRoutes(config.routerFile, config.frontendSrc, {
     parseCache,

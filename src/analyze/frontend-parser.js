@@ -5,6 +5,7 @@ const path = require('path');
 const { parse } = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const { makeParseWarning } = require('./parse-cache');
+const { repairSource } = require('./llm-repair');
 
 const PARSE_OPTS = {
   sourceType: 'module',
@@ -222,12 +223,16 @@ function parseFile(filePath, options = {}) {
   const seenPaths = new Set();
   const clientNames = options.clientNames || DEFAULT_API_CLIENTS;
   let staleParse = false;
+  let parsedVia = null;
+  let llmProvider = null;
 
   let ast;
   try {
     ast = parseWithCache(filePath, src, options);
     staleParse = !!(ast && ast.__qaProbeStaleParse);
     if (staleParse) delete ast.__qaProbeStaleParse;
+    parsedVia = ast && ast.__qaProbeParsedVia;
+    llmProvider = ast && ast.__qaProbeLlmProvider;
   } catch {
     return results;
   }
@@ -261,6 +266,8 @@ function parseFile(filePath, options = {}) {
               rawPath: hit.path,
               callSite,
               staleParse,
+              parsedVia,
+              llmProvider,
             });
           }
           break;
@@ -318,6 +325,11 @@ function parseWithCache(filePath, src, options = {}) {
     return ast;
   } catch (err) {
     const warning = makeParseWarning(filePath, err, { staleParse: false });
+    const repaired = repairSource(filePath, src, options.llmRepair || {}, options.llmRepairProvider);
+    if (repaired) {
+      warnings.push({ ...warning, repaired: true, provider: (options.llmRepair || {}).provider || 'disabled' });
+      return repaired.ast;
+    }
     if (parseCache) {
       const cached = parseCache.get(src);
       const cachedAst = cached.ast || parseCache.getForFile(filePath);
