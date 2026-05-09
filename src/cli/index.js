@@ -37,6 +37,16 @@ program
   });
 
 program
+  .command('fix')
+  .description('Generate high-confidence remediation diffs from the latest qa-probe report')
+  .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
+  .option('--apply', 'apply high-confidence fixes to disk')
+  .option('--pr', 'prepare changes for a pull request branch')
+  .action((opts) => {
+    require('./commands/fix')(opts);
+  });
+
+program
   .command('mcp')
   .description('Start MCP server over stdio — wires qa-probe tools into Claude and Codex')
   .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
