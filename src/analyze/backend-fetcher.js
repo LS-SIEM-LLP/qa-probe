@@ -25,8 +25,10 @@ function createHttpClient(config) {
 function getAdapter(framework) {
   switch (framework) {
     case 'express': return require('./adapters/express');
+    case 'graphql': return require('./adapters/graphql');
     case 'nextjs':  return require('./adapters/fastapi'); // next uses same OpenAPI shape
     case 'generic': return require('./adapters/generic');
+    case 'trpc':    return require('./adapters/trpc');
     default:        return require('./adapters/fastapi');
   }
 }

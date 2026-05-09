@@ -66,6 +66,16 @@ const SchemathesisSchema = z.object({
   hypothesisExamples: z.number().default(50),
 });
 
+const GraphqlSchema = z.object({
+  endpoint: z.string().default('/graphql'),
+  authToken: z.string().optional(),
+});
+
+const TrpcSchema = z.object({
+  routerFile: z.string().default('./server/routers/index.ts'),
+  endpoint: z.string().default('/api/trpc'),
+});
+
 const AnalyzeRuntimeSchema = z.object({
   enabled: z.boolean().default(false),
   browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
@@ -144,9 +154,11 @@ const ConfigSchema = z.object({
   // Target
   baseUrl: z.string().url('baseUrl must be a valid URL'),
   frontendApiPrefix: z.union([z.string(), z.array(z.string())]).default('/api'),
-  framework: z.enum(['fastapi', 'express', 'nextjs', 'generic']).default('fastapi'),
+  framework: z.enum(['fastapi', 'express', 'nextjs', 'generic', 'graphql', 'trpc']).default('fastapi'),
   openApiUrl: z.string().default('/openapi.json'),
   featureStatusUrl: z.string().nullable().default('/health/features'),
+  graphql: GraphqlSchema.default({}),
+  trpc: TrpcSchema.default({}),
 
   // Frontend source
   frontendSrc: z.string().default('./frontend/src'),
