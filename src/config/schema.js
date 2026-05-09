@@ -42,6 +42,17 @@ const OtelSchema = z.object({
   apiKey: z.string().optional(),
 });
 
+const PersonaSchema = z.object({
+  name: z.string(),
+  auth: z.record(z.any()).default({}),
+});
+
+const SecuritySchema = z.object({
+  idor: z.boolean().default(false),
+  pii: z.boolean().default(false),
+  authBypass: z.boolean().default(false),
+});
+
 const AnalyzeRuntimeSchema = z.object({
   enabled: z.boolean().default(false),
   browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
@@ -72,6 +83,8 @@ const ProbeSchema = z.object({
   ws: WsSchema.default({}),
   visual: VisualProbeSchema.default({}),
   otel: OtelSchema.default({}),
+  personas: z.array(PersonaSchema).default([]),
+  security: SecuritySchema.default({}),
 });
 
 const ScoringSchema = z.object({

@@ -30,6 +30,20 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
 
   const { status, ms, empty, schemaErrors, type, connected, error, routeKey } = probeResult;
 
+  if (probeResult.securityFinding) {
+    const finding = probeResult.securityFinding;
+    const hints = {
+      privilege_escalation: 'Review authorization checks and object ownership filters for this endpoint.',
+      pii_leak: 'Remove or document PII fields, mask sensitive values, or restrict the endpoint to authorized personas.',
+      auth_bypass: 'Require authentication middleware for this endpoint and verify anonymous probes return 401/403.',
+    };
+    return {
+      rootCause: finding.rootCause,
+      rootCauseDetail: finding.detail || `${endpointKey} -> ${finding.rootCause}`,
+      fixHint: hints[finding.rootCause] || null,
+    };
+  }
+
   if (type === 'visual') {
     const threshold = probeResult.densityThreshold === undefined ? 0.10 : probeResult.densityThreshold;
     if (probeResult.httpScore >= 80 && probeResult.density < threshold) {

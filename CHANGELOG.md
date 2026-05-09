@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.7.0] - 2026-05-08
+
+### Added
+
+- Multi-persona probing helpers and role-by-route matrix support.
+- Security overlay modules for IDOR checks, PII scanning, and auth-bypass detection.
+- Root-cause classifications for `privilege_escalation`, `pii_leak`, and `auth_bypass`.
+
+---
+
 ## [1.6.0] - 2026-05-08
 
 ### Added
