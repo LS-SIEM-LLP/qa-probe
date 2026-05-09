@@ -3,9 +3,11 @@
 const { generateMinimalBody } = require('./body-strategies/minimal');
 const { generateRealisticBody } = require('./body-strategies/realistic');
 const { generateExampleBody } = require('./body-strategies/example');
+const { generateHarBody } = require('./body-strategies/har');
 
-function generateBody(endpoint, schema, strategy = 'minimal') {
+function generateBody(endpoint, schema, strategy = 'minimal', config = {}) {
   if (strategy === 'empty') return undefined;
+  if (strategy === 'har') return generateHarBody(endpoint, schema, config);
   if (strategy === 'example') return generateExampleBody(schema) || generateMinimalBody(schema);
   if (strategy === 'realistic') return generateRealisticBody(schema);
   return generateMinimalBody(schema);

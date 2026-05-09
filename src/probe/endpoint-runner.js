@@ -21,7 +21,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     const bodyMode = resolvePostBodyMode(endpoint, config);
     const requestSchema = requestBodySchema(routeInfo);
     const requestBody = ['POST', 'PUT', 'PATCH'].includes(method)
-      ? generateBody(endpoint, requestSchema, bodyMode)
+      ? generateBody(endpoint, requestSchema, bodyMode, config)
       : undefined;
     const traceContext = config.probe && config.probe.otel && config.probe.otel.enabled
       ? createTraceContext()

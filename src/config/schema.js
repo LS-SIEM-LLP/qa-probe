@@ -53,6 +53,12 @@ const SecuritySchema = z.object({
   authBypass: z.boolean().default(false),
 });
 
+const HarReplaySchema = z.object({
+  enabled: z.boolean().default(false),
+  harFile: z.string().default('./traffic.har'),
+  anonymize: z.boolean().default(true),
+});
+
 const AnalyzeRuntimeSchema = z.object({
   enabled: z.boolean().default(false),
   browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
@@ -88,8 +94,8 @@ const ProbeSchema = z.object({
   ignoreHTTPSErrors: z.boolean().default(false),
   skipPaths: z.array(z.string()).default(['^/auth/', '^/health/', '^/openapi', '^/docs']),
   safePosts: z.array(z.string()).default([]),
-  postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example']).default('minimal'),
-  postBodyOverrides: z.record(z.enum(['empty', 'minimal', 'realistic', 'example'])).default({}),
+  postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example', 'har']).default('minimal'),
+  postBodyOverrides: z.record(z.enum(['empty', 'minimal', 'realistic', 'example', 'har'])).default({}),
   pathParamValues: z.record(z.string()).default({ id: '1' }),
   sse: SseSchema.default({}),
   ws: WsSchema.default({}),
@@ -97,6 +103,7 @@ const ProbeSchema = z.object({
   otel: OtelSchema.default({}),
   personas: z.array(PersonaSchema).default([]),
   security: SecuritySchema.default({}),
+  harReplay: HarReplaySchema.default({}),
 });
 
 const ScoringSchema = z.object({
