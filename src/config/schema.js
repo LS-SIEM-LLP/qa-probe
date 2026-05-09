@@ -35,6 +35,13 @@ const VisualProbeSchema = z.object({
   navigationTimeoutMs: z.number().default(30000),
 });
 
+const OtelSchema = z.object({
+  enabled: z.boolean().default(false),
+  backend: z.enum(['jaeger', 'tempo', 'honeycomb']).default('jaeger'),
+  baseUrl: z.string().default('http://localhost:16686'),
+  apiKey: z.string().optional(),
+});
+
 const AnalyzeRuntimeSchema = z.object({
   enabled: z.boolean().default(false),
   browser: z.enum(['chromium', 'firefox', 'webkit']).default('chromium'),
@@ -64,6 +71,7 @@ const ProbeSchema = z.object({
   sse: SseSchema.default({}),
   ws: WsSchema.default({}),
   visual: VisualProbeSchema.default({}),
+  otel: OtelSchema.default({}),
 });
 
 const ScoringSchema = z.object({

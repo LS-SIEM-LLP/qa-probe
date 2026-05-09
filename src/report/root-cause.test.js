@@ -420,23 +420,23 @@ describe('server_error', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Rule 9 — slow_but_working
+// Rule 9 — slow_app / slow_dependency
 // ---------------------------------------------------------------------------
 
-describe('slow_but_working', () => {
-  test('200 at 8500ms with 10000ms timeout (85%) → slow_but_working', () => {
+describe('slow_app / slow_dependency', () => {
+  test('200 at 8500ms with 10000ms timeout (85%) -> slow_app', () => {
     const result = classifyEndpoint(
       'GET /logs',
       probe({ status: 200, empty: false, ms: 8500 }),
       graph(),
       { probe: { timeoutMs: 10000 } },
     );
-    assert.equal(result.rootCause, 'slow_but_working');
+    assert.equal(result.rootCause, 'slow_app');
     assert.ok(result.rootCauseDetail.includes('8500ms'));
     assert.ok(result.rootCauseDetail.includes('85%'));
   });
 
-  test('200 at exactly 80% of timeout → NOT slow_but_working (boundary is exclusive)', () => {
+  test('200 at exactly 80% of timeout -> NOT slow_app (boundary is exclusive)', () => {
     // ms > timeout * 0.8, not >=
     const result = classifyEndpoint(
       'GET /logs',
@@ -447,14 +447,14 @@ describe('slow_but_working', () => {
     assert.equal(result.rootCause, 'ok');
   });
 
-  test('200 at 8001ms (just over 80%) → slow_but_working', () => {
+  test('200 at 8001ms (just over 80%) -> slow_app', () => {
     const result = classifyEndpoint(
       'GET /logs',
       probe({ status: 200, empty: false, ms: 8001 }),
       graph(),
       { probe: { timeoutMs: 10000 } },
     );
-    assert.equal(result.rootCause, 'slow_but_working');
+    assert.equal(result.rootCause, 'slow_app');
   });
 
   test('uses default 10000ms timeout when config is absent', () => {
@@ -465,10 +465,10 @@ describe('slow_but_working', () => {
       graph(),
       null,
     );
-    assert.equal(result.rootCause, 'slow_but_working');
+    assert.equal(result.rootCause, 'slow_app');
   });
 
-  test('empty_db wins over slow_but_working when response is empty', () => {
+  test('empty_db wins over slow_app when response is empty', () => {
     const result = classifyEndpoint(
       'GET /logs',
       probe({ status: 200, empty: true, ms: 9000 }),
@@ -476,6 +476,22 @@ describe('slow_but_working', () => {
       cfg,
     );
     assert.equal(result.rootCause, 'empty_db');
+  });
+
+  test('OTel child-dominant traces classify as slow_dependency', () => {
+    const result = classifyEndpoint(
+      'GET /cases',
+      probe({
+        status: 200,
+        empty: false,
+        ms: 9000,
+        otel: { classification: 'slow_dependency', slowComponent: 'db.query' },
+      }),
+      graph(),
+      { probe: { timeoutMs: 10000 } },
+    );
+    assert.equal(result.rootCause, 'slow_dependency');
+    assert.match(result.rootCauseDetail, /db\.query/);
   });
 });
 

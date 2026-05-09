@@ -3,6 +3,7 @@
 const { validateSchema } = require('./schema-validator');
 const { generateBody, resolvePostBodyMode, requestBodySchema } = require('./body-generator');
 const { inferShape } = require('./schema-history');
+const { createTraceContext, correlateTrace } = require('./otel-correlator');
 
 const MAX_RETRIES = 2;
 
@@ -22,10 +23,16 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     const requestBody = ['POST', 'PUT', 'PATCH'].includes(method)
       ? generateBody(endpoint, requestSchema, bodyMode)
       : undefined;
+    const traceContext = config.probe && config.probe.otel && config.probe.otel.enabled
+      ? createTraceContext()
+      : null;
+    const requestHeaders = traceContext
+      ? { ...headers, traceparent: traceContext.traceparent }
+      : headers;
     const res = await http.request({
       method: method.toLowerCase(),
       url: endpointPath,
-      headers,
+      headers: requestHeaders,
       data: requestBody,
       // Accept JSON and event-stream (for endpoints that might be either)
       validateStatus: () => true,
@@ -84,6 +91,15 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       }
     }
 
+    let otel = null;
+    if (traceContext) {
+      try {
+        otel = await correlateTrace(traceContext.traceId, config);
+      } catch (err) {
+        otel = { error: err.message, traceId: traceContext.traceId };
+      }
+    }
+
     result = {
       status: res.status,
       ms,
@@ -98,6 +114,8 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       requestBodyMode: requestBody === undefined ? 'empty' : bodyMode,
       contentType: res.headers['content-type'] || null,
       retries: attempt,
+      traceId: traceContext ? traceContext.traceId : null,
+      otel,
     };
   } catch (err) {
     const ms = Date.now() - start;
