@@ -32,8 +32,19 @@ function createParseCache(configOrOptions = {}) {
       return hash;
     },
     save() {
+      // Persist file→hash mappings + per-file metadata only. Babel ASTs are
+      // huge (5–15× source size) and contain circular parent pointers; for any
+      // real-world frontend (e.g. 300+ files) JSON.stringify of the full AST
+      // payload exceeds V8's max string length (~512MB) and crashes with
+      // "Invalid string length". The in-memory cache still serves stale-AST
+      // fallback within a single run; cross-run fallback is intentionally
+      // dropped here in exchange for correctness on large codebases.
+      const trimmedEntries = {};
+      for (const [hash, entry] of Object.entries(entries)) {
+        trimmedEntries[hash] = { updatedAt: entry.updatedAt };
+      }
       fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
-      fs.writeFileSync(cacheFile, JSON.stringify({ version: 1, entries, files }, null, 2), 'utf8');
+      fs.writeFileSync(cacheFile, JSON.stringify({ version: 1, entries: trimmedEntries, files }), 'utf8');
     },
   };
 }
