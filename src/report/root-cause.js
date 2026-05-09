@@ -44,6 +44,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
     };
   }
 
+  if (probeResult.anomaly) {
+    return {
+      rootCause: 'anomaly_vs_baseline',
+      rootCauseDetail: probeResult.anomaly.detail,
+      fixHint: probeResult.anomaly.fixHint || 'Compare this endpoint against recent healthy runs before treating it as an application failure.',
+    };
+  }
+
   if (type === 'visual') {
     const threshold = probeResult.densityThreshold === undefined ? 0.10 : probeResult.densityThreshold;
     if (probeResult.httpScore >= 80 && probeResult.density < threshold) {
