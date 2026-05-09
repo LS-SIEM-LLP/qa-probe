@@ -52,6 +52,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
     };
   }
 
+  if (probeResult.schemathesisFailure) {
+    return {
+      rootCause: 'validation_edge_case',
+      rootCauseDetail: probeResult.schemathesisFailure.check || probeResult.schemathesisFailure.error || 'Schemathesis found an edge-case failure',
+      fixHint: probeResult.schemathesisFailure.fixHint || 'Reproduce the Schemathesis payload and tighten request/response validation.',
+    };
+  }
+
   if (type === 'visual') {
     const threshold = probeResult.densityThreshold === undefined ? 0.10 : probeResult.densityThreshold;
     if (probeResult.httpScore >= 80 && probeResult.density < threshold) {

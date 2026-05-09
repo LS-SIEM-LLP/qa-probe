@@ -273,6 +273,7 @@ function displayCause(rootCause) {
     pii_leak: 'pii_leak',
     auth_bypass: 'auth_bypass',
     anomaly_vs_baseline: 'anomaly_vs_baseline',
+    validation_edge_case: 'validation_edge_case',
     feature_flag_disabled: 'feature_flag_disabled',
     sample_not_found: 'sample_not_found',
     invalid_sample_params: 'invalid_sample',
@@ -297,6 +298,7 @@ function severityFor(rootCause) {
     case 'privilege_escalation':
     case 'pii_leak':
     case 'auth_bypass':
+    case 'validation_edge_case':
       return 'high';
     case 'anomaly_vs_baseline':
       return 'medium';
