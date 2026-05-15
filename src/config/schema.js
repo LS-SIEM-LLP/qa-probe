@@ -110,6 +110,8 @@ const ProbeSchema = z.object({
   timeoutMs: z.number().default(10000),
   ignoreHTTPSErrors: z.boolean().default(false),
   skipPaths: z.array(z.string()).default(['^/auth/', '^/health/', '^/openapi', '^/docs']),
+  expectedEmptyPaths: z.array(z.string()).default([]),
+  generatedSamplePaths: z.array(z.string()).default([]),
   safePosts: z.array(z.string()).default([]),
   postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example', 'har']).default('minimal'),
   postBodyOverrides: z.record(z.enum(['empty', 'minimal', 'realistic', 'example', 'har'])).default({}),

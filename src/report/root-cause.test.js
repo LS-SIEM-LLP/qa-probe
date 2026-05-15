@@ -200,6 +200,27 @@ describe('probe sample diagnostics', () => {
     assert.equal(result.rootCause, 'invalid_sample_params');
   });
 
+  test('404 on configured generated sample path -> sample_unavailable', () => {
+    const result = classifyEndpoint(
+      'GET /cases/1',
+      probe({ status: 404, routeKey: 'GET /cases/{case_id}' }),
+      graph({ backendRoutes: { 'GET /cases/{case_id}': {} } }),
+      { probe: { timeoutMs: 10000, generatedSamplePaths: ['^/cases/[^/]+$'] } },
+    );
+    assert.equal(result.rootCause, 'sample_unavailable');
+    assert.ok(result.rootCauseDetail.includes('does not require'));
+  });
+
+  test('422 on configured generated sample path -> sample_unavailable', () => {
+    const result = classifyEndpoint(
+      'GET /entity-risk/user/1',
+      probe({ status: 422, routeKey: 'GET /entity-risk/{entity_type}/{entity_id}' }),
+      graph({ backendRoutes: { 'GET /entity-risk/{entity_type}/{entity_id}': {} } }),
+      { probe: { timeoutMs: 10000, generatedSamplePaths: ['^/entity-risk/[^/]+'] } },
+    );
+    assert.equal(result.rootCause, 'sample_unavailable');
+  });
+
   test('timed out request -> timeout', () => {
     const result = classifyEndpoint(
       'GET /agent/report',
@@ -249,6 +270,17 @@ describe('empty_db', () => {
     // Should NOT contain any project-specific container names
     assert.ok(!result.fixHint.includes('ls-api'));
     assert.ok(!result.fixHint.includes('LightShield'));
+  });
+
+  test('configured quiet-state endpoint -> expected_empty', () => {
+    const result = classifyEndpoint(
+      'GET /parsers/quarantine?limit=25',
+      probe({ status: 200, empty: true, emptyReason: 'empty_array' }),
+      graph(),
+      { probe: { timeoutMs: 10000, expectedEmptyPaths: ['^/parsers/quarantine$'] } },
+    );
+    assert.equal(result.rootCause, 'expected_empty');
+    assert.equal(result.fixHint, null);
   });
 });
 

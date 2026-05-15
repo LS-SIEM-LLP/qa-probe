@@ -123,6 +123,8 @@ function printProbeResults(results) {
 
 function displayCause(rootCause) {
   if (rootCause === 'empty_db') return 'no_data';
+  if (rootCause === 'expected_empty') return 'expected_empty';
+  if (rootCause === 'sample_unavailable') return 'sample_unavailable';
   if (rootCause === 'invalid_sample_params') return 'invalid_sample';
   if (rootCause === 'unknown') return 'needs_review';
   return rootCause || 'ok';

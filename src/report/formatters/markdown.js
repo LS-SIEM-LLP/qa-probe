@@ -123,7 +123,7 @@ function writeEndpointDiagnostics(lines, diagnostics) {
 
   lines.push('## Endpoint Diagnostics');
   lines.push('');
-  lines.push('Concrete probe evidence. `no_data` means the API returned 200 OK with an empty array/object/body; qa-probe does not query the database directly.');
+  lines.push('Concrete probe evidence. `no_data` means the API returned 200 OK with an empty array/object/body; configured quiet-state endpoints are treated as healthy expected-empty responses.');
   lines.push('');
   lines.push('| Endpoint | Label | Severity | Evidence | Affected Routes |');
   lines.push('|---|---|---|---|---|');
@@ -163,6 +163,8 @@ function writeEndpointDiagnostics(lines, diagnostics) {
 
 function displayCause(rootCause) {
   if (rootCause === 'empty_db') return 'no_data';
+  if (rootCause === 'expected_empty') return 'expected_empty';
+  if (rootCause === 'sample_unavailable') return 'sample_unavailable';
   if (rootCause === 'unknown') return 'needs_review';
   if (rootCause === 'sample_not_found') return 'sample_not_found';
   if (rootCause === 'invalid_sample_params') return 'invalid_sample';
