@@ -97,6 +97,8 @@ function writeAiContext(report, graph, config) {
 
 function displayCause(rootCause) {
   if (rootCause === 'empty_db') return 'no_data';
+  if (rootCause === 'expected_empty') return 'expected_empty';
+  if (rootCause === 'sample_unavailable') return 'sample_unavailable';
   if (rootCause === 'unknown') return 'needs_review';
   if (rootCause === 'invalid_sample_params') return 'invalid_sample';
   return rootCause || 'ok';

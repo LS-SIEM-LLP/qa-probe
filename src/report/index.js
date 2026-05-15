@@ -58,7 +58,7 @@ async function runReport(graph, probeResults, config) {
   const rootCauseSummary = {};
   for (const [endpointKey, cause] of Object.entries(endpointRootCauses)) {
     const rc = cause.rootCause;
-    if (rc === 'ok' || !rc) continue;
+    if (isNonIssueRootCause(rc)) continue;
     if (!rootCauseSummary[rc]) rootCauseSummary[rc] = { count: 0, affectedRoutes: [] };
     rootCauseSummary[rc].count++;
 
@@ -96,7 +96,7 @@ async function runReport(graph, probeResults, config) {
     for (const call of apiCalls) {
       const epKey = `${call.method} ${call.backendPath || call.path}`;
       const cause = endpointRootCauses[epKey];
-      if (cause && cause.rootCause !== 'ok') {
+      if (cause && !isNonIssueRootCause(cause.rootCause)) {
         if (!worstCause) {
           worstCause = cause.rootCause;
           worstDetail = cause.rootCauseDetail;
@@ -107,7 +107,7 @@ async function runReport(graph, probeResults, config) {
 
     const visualKey = `VISUAL ${routePath}`;
     const visualCause = endpointRootCauses[visualKey];
-    if (visualCause && visualCause.rootCause !== 'ok') {
+    if (visualCause && !isNonIssueRootCause(visualCause.rootCause)) {
       worstCause = visualCause.rootCause;
       worstDetail = visualCause.rootCauseDetail;
       fixHint = visualCause.fixHint;
@@ -142,7 +142,7 @@ async function runReport(graph, probeResults, config) {
     clusters,
     regression: null,
     parseWarnings: graph.warnings || [],
-    schemaDrift: (probeResults && probeResults.__schemaDrift) || [],
+    schemaDrift: filterSchemaDrift((probeResults && probeResults.__schemaDrift) || [], endpointRootCauses),
   };
 
   const regression = detectRegression(report, previousRun);
@@ -207,7 +207,7 @@ function buildEndpointDiagnostics(graph, probeResults, endpointRootCauses) {
   const routeIndex = buildEndpointRouteIndex(graph);
 
   return Object.entries(endpointRootCauses || {})
-    .filter(([, cause]) => cause && cause.rootCause && cause.rootCause !== 'ok')
+    .filter(([, cause]) => cause && cause.rootCause && !isNonIssueRootCause(cause.rootCause))
     .map(([endpointKey, cause]) => {
       const probe = (probeResults && probeResults[endpointKey]) || {};
       const affectedRoutes = routeIndex[endpointKey] || [];
@@ -237,6 +237,24 @@ function buildEndpointDiagnostics(graph, probeResults, endpointRootCauses) {
     });
 }
 
+function filterSchemaDrift(schemaDrift, endpointRootCauses) {
+  return (schemaDrift || [])
+    .filter(change => {
+      const cause = endpointRootCauses && endpointRootCauses[change.endpoint];
+      return !cause || !isNonIssueRootCause(cause.rootCause);
+    })
+    .map(change => {
+      if (isNullableDrift(change)) {
+        return { ...change, kind: 'sample_variation' };
+      }
+      return change;
+    });
+}
+
+function isNullableDrift(change) {
+  return /(^|[^\w])null($|[^\w])/i.test(String((change && change.detail) || ''));
+}
+
 function buildEndpointRouteIndex(graph) {
   const index = {};
   for (const [routePath, routeData] of Object.entries((graph && graph.frontendRoutes) || {})) {
@@ -256,6 +274,8 @@ function buildEndpointRouteIndex(graph) {
 function displayCause(rootCause) {
   const labels = {
     empty_db: 'no_data',
+    expected_empty: 'expected_empty',
+    sample_unavailable: 'sample_unavailable',
     contract_mismatch: 'contract_mismatch',
     missing_route: 'missing_route',
     server_error: 'server_error',
@@ -313,12 +333,17 @@ function severityFor(rootCause) {
       return 'medium';
     case 'empty_db':
       return 'low';
+    case 'expected_empty':
+    case 'sample_unavailable':
+      return 'info';
     default:
       return 'info';
   }
 }
 
 function confidenceFor(rootCause, probe) {
+  if (rootCause === 'expected_empty') return 'high';
+  if (rootCause === 'sample_unavailable') return 'high';
   if (rootCause === 'empty_db') return 'medium';
   if (rootCause === 'unknown') return 'low';
   if (rootCause === 'sample_not_found') return 'high';
@@ -327,6 +352,10 @@ function confidenceFor(rootCause, probe) {
   if (rootCause === 'data_received_not_rendered') return 'high';
   if (probe && probe.status === null) return 'medium';
   return 'high';
+}
+
+function isNonIssueRootCause(rootCause) {
+  return !rootCause || rootCause === 'ok' || rootCause === 'expected_empty' || rootCause === 'sample_unavailable';
 }
 
 function createSpinner() {

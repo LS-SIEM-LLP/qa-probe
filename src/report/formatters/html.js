@@ -194,7 +194,7 @@ function renderHtmlReport(report) {
         <div class="body summary-list">
           ${summaryItem('Mode', (report.meta && report.meta.headless) ? 'Headless HTTP probe' : 'OpenAPI-backed probe')}
           ${summaryItem('Likely real backend issues', `${highIssues.length} high severity endpoint issue(s)`)}
-          ${summaryItem('Likely demo data gaps', `${noData.length} no-data response(s)`)}
+          ${summaryItem('Likely demo data gaps', `${noData.length} non-expected no-data response(s)`)}
           ${summaryItem('Regression signal', `${regressions.length} new failure(s), ${newlyPassing.length} newly passing`)}
         </div>
       </div>
@@ -340,6 +340,8 @@ function summaryItem(label, value) {
 
 function displayCause(rootCause) {
   if (rootCause === 'empty_db') return 'no_data';
+  if (rootCause === 'expected_empty') return 'expected_empty';
+  if (rootCause === 'sample_unavailable') return 'sample_unavailable';
   if (rootCause === 'unknown') return 'needs_review';
   if (rootCause === 'invalid_sample_params') return 'invalid_sample';
   return rootCause || 'ok';
@@ -349,6 +351,7 @@ function causeClass(rootCause) {
   if (['server_error', 'missing_route', 'contract_mismatch', 'auth_scope_mismatch', 'schema_mismatch', 'stream_dead'].includes(rootCause)) return 'high';
   if (['slow_but_working', 'feature_flag_disabled', 'timeout', 'unknown'].includes(rootCause)) return 'medium';
   if (rootCause === 'empty_db') return 'low';
+  if (rootCause === 'expected_empty' || rootCause === 'sample_unavailable') return 'info';
   return 'info';
 }
 

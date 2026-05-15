@@ -111,10 +111,17 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   // developer exactly which route to align to, rather than leaving them to search.
   if (status === 404) {
     if (routeKey && /\{[^}]+\}/.test(routeKey)) {
+      if (matchesProbePath(config, 'generatedSamplePaths', endpointKey, routeKey)) {
+        return {
+          rootCause: 'sample_unavailable',
+          rootCauseDetail: `${endpointKey} -> 404 on sampled route ${routeKey}. This QA profile probes the route shape, but does not require the generated sample record to exist.`,
+          fixHint: 'For deeper contract testing, set a real pathParamValues fixture or move this route out of probe.generatedSamplePaths.',
+        };
+      }
       return {
         rootCause: 'sample_not_found',
         rootCauseDetail: `${endpointKey} -> 404 on known backend route ${routeKey}. The sampled path value probably does not exist.`,
-        fixHint: 'Set probe.pathParamValues in qa-probe.config.js to IDs/slugs that exist in your demo or test database.',
+        fixHint: 'Set probe.pathParamValues in qa-probe.config.js to IDs/slugs that exist in your demo or test database, or add non-fixture detail routes to probe.generatedSamplePaths.',
       };
     }
 
@@ -150,10 +157,17 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   }
 
   if (status === 400 || status === 422) {
+    if (matchesProbePath(config, 'generatedSamplePaths', endpointKey, routeKey)) {
+      return {
+        rootCause: 'sample_unavailable',
+        rootCauseDetail: `${endpointKey} -> ${status}. Generated probe parameters are intentionally smoke-test-only for this endpoint.`,
+        fixHint: 'For strict validation, provide route-specific sample params or remove this pattern from probe.generatedSamplePaths.',
+      };
+    }
     return {
       rootCause: 'invalid_sample_params',
       rootCauseDetail: `${endpointKey} -> ${status}. Generated probe parameters did not satisfy this endpoint's validation rules.`,
-      fixHint: 'Tune probe.pathParamValues or skip this endpoint if it requires domain-specific query parameters.',
+      fixHint: 'Tune probe.pathParamValues, provide endpoint-specific fixtures, or add non-fixture detail/query routes to probe.generatedSamplePaths.',
     };
   }
 
@@ -177,6 +191,13 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   if (status === 200) {
     // --- Rule 4: empty_db ---
     if (empty) {
+      if (matchesProbePath(config, 'expectedEmptyPaths', endpointKey, routeKey)) {
+        return {
+          rootCause: 'expected_empty',
+          rootCauseDetail: `${endpointKey} -> 200 but ${probeResult.emptyReason || 'empty body'}. Empty is an expected healthy quiet-state for this endpoint.`,
+          fixHint: null,
+        };
+      }
       const seedCmd = config && config.seedCommand;
       const seedHint = seedCmd
         ? `Run: ${seedCmd}`
@@ -275,6 +296,25 @@ function classifySchemaError(error) {
     rootCause: 'schema_mismatch',
     fixHint: 'A field was renamed or removed. Align the frontend component or backend response model.',
   };
+}
+
+function matchesProbePath(config, configKey, endpointKey, routeKey) {
+  const patterns = config && config.probe && config.probe[configKey];
+  if (!Array.isArray(patterns) || patterns.length === 0) return false;
+
+  const endpointPath = pathWithoutMethod(endpointKey).split('?')[0];
+  const routePath = routeKey ? pathWithoutMethod(routeKey).split('?')[0] : null;
+
+  return patterns.some(pattern => {
+    const rx = new RegExp(pattern);
+    return rx.test(endpointPath) || (routePath && rx.test(routePath));
+  });
+}
+
+function pathWithoutMethod(key) {
+  const text = String(key || '');
+  const firstSpace = text.indexOf(' ');
+  return firstSpace === -1 ? text : text.slice(firstSpace + 1);
 }
 
 function getFlagName(endpointKey, graph) {

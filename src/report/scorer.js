@@ -26,6 +26,9 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
     const rootCause = cause && cause.rootCause;
 
     switch (rootCause) {
+      case 'expected_empty':
+      case 'sample_unavailable':
+        break;
       case 'feature_flag_disabled':
         score += (weights.disabledFeature || -15);
         penalties.push({ probeKey, reason: 'feature_flag_disabled', delta: weights.disabledFeature || -15 });

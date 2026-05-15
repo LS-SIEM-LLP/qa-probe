@@ -49,11 +49,49 @@ describe('schema validation', () => {
     assert.ok(changes.some(c => c.kind === 'additive' && c.field === 'username'));
   });
 
+  test('schema history detects top-level response type changes', () => {
+    const oldSnapshot = { 'GET /alerts': { type: 'array', fields: { id: 'number' } } };
+    const newSnapshot = { 'GET /alerts': { type: 'object', fields: { id: 'number' } } };
+    const changes = diffSchemaSnapshots(oldSnapshot, newSnapshot);
+    assert.ok(changes.some(c => c.kind === 'breaking' && c.field === '$body'));
+  });
+
+  test('schema history classifies nullable samples separately from breaking drift', () => {
+    const oldSnapshot = { 'GET /anchor': { type: 'object', fields: { last_anchor: 'object' } } };
+    const newSnapshot = { 'GET /anchor': { type: 'object', fields: { last_anchor: 'null' } } };
+    const changes = diffSchemaSnapshots(oldSnapshot, newSnapshot);
+    assert.ok(changes.some(c => c.kind === 'sample_variation' && c.field === 'last_anchor'));
+    assert.ok(!changes.some(c => c.kind === 'breaking'));
+  });
+
+  test('schema history classifies top-level nullable samples separately', () => {
+    const oldSnapshot = { 'GET /active-model': { type: 'object', fields: { id: 'number' } } };
+    const newSnapshot = { 'GET /active-model': { type: 'null', fields: {} } };
+    const changes = diffSchemaSnapshots(oldSnapshot, newSnapshot);
+    assert.ok(changes.some(c => c.kind === 'sample_variation' && c.field === '$body'));
+  });
+
   test('schema history snapshots are written under history/schemas', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-probe-schema-history-'));
     const config = { output: { dir: path.join(root, '.qaprobe') } };
     const { snapshotSchemas } = require('./schema-history');
     snapshotSchemas({ 'GET /cases': { responseShape: { type: 'object', fields: { id: 'number' } } } }, config);
     assert.ok(fs.readdirSync(path.join(root, '.qaprobe', 'history', 'schemas')).length > 0);
+  });
+
+  test('schema history does not snapshot empty response shapes as breaking drift candidates', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-probe-schema-history-empty-'));
+    const config = { output: { dir: path.join(root, '.qaprobe') } };
+    const { snapshotSchemas, loadPreviousSchemaSnapshot } = require('./schema-history');
+
+    snapshotSchemas({
+      'GET /alerts/dedup': {
+        empty: true,
+        responseShape: { type: 'array', fields: {} },
+      },
+    }, config);
+
+    const snapshot = loadPreviousSchemaSnapshot(config);
+    assert.deepEqual(snapshot.schemas, {});
   });
 });
