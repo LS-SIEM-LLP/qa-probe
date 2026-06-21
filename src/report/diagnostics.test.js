@@ -16,6 +16,11 @@ describe('buildEndpointDiagnostics', () => {
         },
       },
     };
+    const evidence = {
+      request: { method: 'GET', path: '/alerts/dedup' },
+      response: { status: 200, contentType: 'application/json', bodyType: 'array', itemCount: 0, sample: '[]' },
+      timing: { ms: 42 },
+    };
     const probeResults = {
       'GET /alerts/dedup': {
         status: 200,
@@ -23,6 +28,7 @@ describe('buildEndpointDiagnostics', () => {
         empty: true,
         emptyReason: 'empty_array',
         itemCount: 0,
+        evidence,
       },
     };
     const rootCauses = {
@@ -42,9 +48,11 @@ describe('buildEndpointDiagnostics', () => {
     assert.equal(diagnostics[0].confidence, 'medium');
     assert.deepEqual(diagnostics[0].affectedRoutes, ['/alerts']);
     assert.equal(diagnostics[0].emptyReason, 'empty_array');
+    // Evidence flows through verbatim so a consumer can verify the diagnosis.
+    assert.deepEqual(diagnostics[0].evidence, evidence);
   });
 
-  test('marks unmatched unknown endpoint evidence as backend-only low confidence', () => {
+  test('an unclassified (unknown) endpoint reports confidence: none, not a false guess', () => {
     const diagnostics = buildEndpointDiagnostics(
       { frontendRoutes: {} },
       { 'GET /agent/report': { status: null, ms: 15000, error: 'timeout of 15000ms exceeded' } },
@@ -52,9 +60,19 @@ describe('buildEndpointDiagnostics', () => {
     );
 
     assert.equal(diagnostics[0].label, 'needs_review');
-    assert.equal(diagnostics[0].confidence, 'low');
+    // 'none' (not 'low') — qa-probe had no rule for this; it must not imply a weak guess.
+    assert.equal(diagnostics[0].confidence, 'none');
     assert.deepEqual(diagnostics[0].affectedRoutes, []);
     assert.equal(diagnostics[0].error, 'timeout of 15000ms exceeded');
+  });
+
+  test('an explicit classifier confidence overrides the rootCause default', () => {
+    const diagnostics = buildEndpointDiagnostics(
+      { frontendRoutes: {} },
+      { 'GET /x': { status: 428 } },
+      { 'GET /x': { rootCause: 'precondition_required', confidence: 'high' } },
+    );
+    assert.equal(diagnostics[0].confidence, 'high');
   });
 
   test('suppresses expected-empty and generated-sample statuses from issue diagnostics', () => {

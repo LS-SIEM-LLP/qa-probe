@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.4.0] - 2026-06-21
+
+### Added — Trust contract (provenance + calibrated confidence)
+
+Every result is now verifiable and honest about its certainty, so an AI (or human) consumer never has to trust a label blind. This is the foundation for the upcoming feedback/learning loop.
+
+- **`evidence` on every probe result and diagnostic** — the request issued plus a bounded snapshot of what the server actually returned (status, content-type, body type, item count, truncated body sample, timing). Request auth headers are never captured.
+- **Calibrated `confidence`** — a classifier rule may now set its own confidence; `unknown` is `confidence: none` (no rule matched), no longer a misleading `low`.
+- **Self-explaining `unknown`** — an unclassified result now states it is *not a confirmed pass* and points the consumer at the captured evidence, instead of a bare `status=…`.
+- **`trust` note in `qa_probe_explain_failure`** — the MCP tool flags when calls are unclassified and instructs the consumer not to report them as passing without checking the evidence. Each call also carries its `rootCause`, `confidence`, and `evidence`.
+
+### Changed
+
+- `unknown` confidence is now `none` instead of `low`.
+
+---
+
 ## [2.3.2] - 2026-06-21
 
 ### Fixed

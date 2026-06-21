@@ -216,7 +216,7 @@ function buildEndpointDiagnostics(graph, probeResults, endpointRootCauses) {
         rootCause: cause.rootCause,
         label: displayCause(cause.rootCause),
         severity: severityFor(cause.rootCause),
-        confidence: confidenceFor(cause.rootCause, probe),
+        confidence: cause.confidence || confidenceFor(cause.rootCause, probe),
         affectedRoutes,
         affectedRouteCount: affectedRoutes.length,
         status: probe.status === undefined ? null : probe.status,
@@ -227,6 +227,9 @@ function buildEndpointDiagnostics(graph, probeResults, endpointRootCauses) {
         error: probe.error || null,
         detail: cause.rootCauseDetail || null,
         fixHint: cause.fixHint || null,
+        // Verifiable evidence (request + bounded raw response snapshot + timing) so a
+        // consumer can check the diagnosis instead of trusting the label.
+        evidence: probe.evidence || null,
       };
     })
     .sort((a, b) => {
@@ -345,7 +348,7 @@ function confidenceFor(rootCause, probe) {
   if (rootCause === 'expected_empty') return 'high';
   if (rootCause === 'sample_unavailable') return 'high';
   if (rootCause === 'empty_db') return 'medium';
-  if (rootCause === 'unknown') return 'low';
+  if (rootCause === 'unknown') return 'none';
   if (rootCause === 'sample_not_found') return 'high';
   if (rootCause === 'invalid_sample_params') return 'medium';
   if (rootCause === 'timeout') return 'medium';

@@ -249,6 +249,16 @@ You don't need to know the tool names. Just ask naturally:
 
 > **Note:** MCP output has SQL errors, stack traces, and table names redacted before they reach the AI. The raw data stays on disk.
 
+### Trust contract (for AI consumers)
+
+Every diagnosis is **verifiable and honest about its certainty**, so an AI (or human) never has to trust a label blind:
+
+- **`evidence`** — each result carries the request issued and a bounded, sanitized snapshot of what the server actually returned (status, content-type, body sample, timing). Auth headers are never captured.
+- **`confidence`** — `high` (deterministic HTTP semantics), `medium` (inferred), or **`none`** (qa-probe has no rule for this signal). A `confidence: none` / `unknown` result is explicitly *not* a confirmed pass.
+- **`trust`** — `qa_probe_explain_failure` returns a plain-English note when any call is unclassified, so an AI knows not to report it as passing without checking the evidence.
+
+The intent: **100% real, fully transparent results** — confident answers come with their evidence, and "I don't know" is said out loud instead of hidden behind a perfect-looking score.
+
 ---
 
 ## CI / GitHub Actions

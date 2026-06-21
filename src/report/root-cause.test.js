@@ -589,6 +589,23 @@ describe('unknown', () => {
     const result = classifyEndpoint('GET /alerts', probe({ status: 418 }), graph(), cfg);
     assert.ok(result.rootCauseDetail.includes('418'));
   });
+
+  test('unknown self-explains: says it is unclassified / not a confirmed pass', () => {
+    const result = classifyEndpoint('GET /alerts', probe({ status: 418 }), graph(), cfg);
+    assert.match(result.rootCauseDetail, /unclassified|no classifier rule matched/i);
+    assert.match(result.rootCauseDetail, /not a confirmed pass/i);
+  });
+
+  test('unknown carries confidence: none and an unmatched flag', () => {
+    const result = classifyEndpoint('GET /alerts', probe({ status: 418 }), graph(), cfg);
+    assert.equal(result.confidence, 'none');
+    assert.equal(result.unmatched, true);
+  });
+
+  test('unknown points the consumer at the evidence, not a false pass', () => {
+    const result = classifyEndpoint('GET /alerts', probe({ status: 418 }), graph(), cfg);
+    assert.match(result.fixHint, /evidence/i);
+  });
 });
 
 // ---------------------------------------------------------------------------

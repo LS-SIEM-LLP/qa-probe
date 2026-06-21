@@ -22,9 +22,15 @@ module.exports = {
     const apiCalls = (graphRoute && graphRoute.apiCalls) || [];
     const callDetails = [];
 
+    // Index the per-endpoint diagnostics so each call can carry its classification,
+    // confidence, and verifiable evidence — not just a status code.
+    const diagByKey = {};
+    for (const d of (report.endpointDiagnostics || [])) diagByKey[d.endpoint] = d;
+
     for (const call of apiCalls) {
       const key = `${call.method} ${call.backendPath || call.path}`;
       const probe = probeResults && probeResults[key];
+      const diag = diagByKey[key];
       callDetails.push({
         call: key,
         callSite: call.callSite,
@@ -32,8 +38,17 @@ module.exports = {
         ms: probe ? probe.ms : null,
         empty: probe ? probe.empty : null,
         itemCount: probe ? probe.itemCount : null,
+        rootCause: diag ? diag.rootCause : null,
+        // Calibrated confidence: how much the diagnosis should be trusted.
+        // 'none' means qa-probe could not classify this — treat it as unverified.
+        confidence: diag ? diag.confidence : null,
+        // Raw, verifiable evidence (sanitized): the request issued and what the
+        // server actually returned. Check this rather than trusting the label.
+        evidence: probe ? probe.evidence || null : null,
       });
     }
+
+    const unclassified = callDetails.filter(c => c.rootCause === 'unknown' || c.confidence === 'none');
 
     return {
       route,
@@ -42,6 +57,10 @@ module.exports = {
       rootCause: routeData.rootCause,
       rootCauseDetail: routeData.rootCauseDetail,
       fixHint: routeData.fixHint,
+      // Transparency contract for AI consumers: be explicit when a result is NOT verified.
+      trust: unclassified.length > 0
+        ? `${unclassified.length} of ${callDetails.length} calls are UNCLASSIFIED (confidence: none). qa-probe has no rule for them — treat them as unverified, inspect each call's evidence, and do not report them as passing.`
+        : 'All probed calls were classified with a known rule; inspect each call\'s evidence to verify.',
       apiCalls: callDetails,
       featureFlag: graph.featureFlags && graph.featureFlags[route],
     };
