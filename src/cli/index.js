@@ -47,6 +47,17 @@ program
   });
 
 program
+  .command('label <endpoint> <verdict>')
+  .description('Record feedback on a diagnosis, reapplied on future runs. verdict: expected|ignore|known_gate|ok (suppress) or bug|real_bug|confirm.')
+  .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
+  .option('-r, --reason <text>', 'why this verdict (recommended — it is the audit trail)')
+  .option('-s, --signal <rootCause>', 'only apply while the endpoint produces this rootCause (default: any)')
+  .option('--by <name>', 'who recorded this (default: human)')
+  .action((endpoint, verdict, opts) => {
+    require('./commands/label')(endpoint, verdict, opts);
+  });
+
+program
   .command('mcp')
   .description('Start MCP server over stdio — wires qa-probe tools into Claude and Codex')
   .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')

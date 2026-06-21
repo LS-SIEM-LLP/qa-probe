@@ -259,6 +259,23 @@ Every diagnosis is **verifiable and honest about its certainty**, so an AI (or h
 
 The intent: **100% real, fully transparent results** — confident answers come with their evidence, and "I don't know" is said out loud instead of hidden behind a perfect-looking score.
 
+### Feedback — teach qa-probe (it gets smarter the more it's used)
+
+Humans and AIs can record a verdict on any diagnosis; qa-probe persists it and reapplies it on future runs.
+
+```bash
+# Suppress a finding you've confirmed is fine:
+qa-probe label "GET /alerts" expected -r "demo DB is empty by design"
+# Confirm a real problem so it stays flagged with high confidence:
+qa-probe label "GET /reports" bug -r "known 500 on cold cache"
+```
+
+Via MCP, an AI calls **`qa_probe_label`** with the same arguments — so an assistant can write back what it figured out instead of re-deriving it every run.
+
+- **Verdicts** — `expected` / `ignore` / `known_gate` / `ok` *suppress* (reclassify as `acknowledged`); `bug` / `real_bug` / `confirm` *confirm* (keep it flagged, high confidence).
+- **Honesty guard** — a label can be scoped to the rootCause it was made for (`--signal empty_db`). If the endpoint's behavior later changes (e.g. starts returning `500`), the label **auto-revokes** so a stale "expected" can never hide a regression.
+- **Transparent** — suppression is never silent: the report's `feedback` block lists every label applied this run, by whom, and why. Stored in `<output.dir>/feedback.json` (point `feedbackFile` at a committed path to share across a team/CI).
+
 ---
 
 ## CI / GitHub Actions

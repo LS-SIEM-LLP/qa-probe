@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.0] - 2026-06-21
+
+### Added — Feedback writeback (first piece of the learning loop)
+
+Humans and AIs can label a diagnosis; qa-probe persists it and reapplies it on future runs, so it improves the more it is used — without any model or black box.
+
+- **`qa-probe label <endpoint> <verdict>`** CLI command and **`qa_probe_label`** MCP tool. Suppress verdicts (`expected`/`ignore`/`known_gate`/`ok`) reclassify a finding as `acknowledged` (a non-issue); confirm verdicts (`bug`/`real_bug`/`confirm`) keep it flagged at high confidence.
+- **Honesty guard** — a label can be scoped to a rootCause (`signal`); it auto-revokes if the observed rootCause changes, so a stale "expected" can never hide a regression.
+- **Transparent** — the report gains a `feedback` block listing every label applied this run (endpoint, verdict, by, reason). Suppression is never silent.
+- Feedback persists in `<output.dir>/feedback.json` (override with `feedbackFile` to commit/share it).
+
+---
+
 ## [2.4.0] - 2026-06-21
 
 ### Added — Trust contract (provenance + calibrated confidence)

@@ -13,6 +13,7 @@ const tools = [
   require('./tools/suggest-fix'),
   require('./tools/blast-radius'),
   require('./tools/run-analysis'),
+  require('./tools/label'),
 ];
 
 async function startMcpServer(config) {
