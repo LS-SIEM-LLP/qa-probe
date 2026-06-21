@@ -262,7 +262,7 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   }
 
   // Anything else — not probed or unknown
-  if (status === null && error && /timeout|aborted|ECONNRESET|socket hang up/i.test(error)) {
+  if (status === null && error && /timeout|deadline|aborted|canceled|cancelled|ECONNRESET|socket hang up/i.test(error)) {
     return {
       rootCause: 'timeout',
       rootCauseDetail: `${endpointKey} -> ${error}`,

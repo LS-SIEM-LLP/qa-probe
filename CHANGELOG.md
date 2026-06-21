@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.2] - 2026-06-21
+
+### Fixed
+
+- **Probe can no longer hang indefinitely on a streaming/long-poll endpoint.** axios's `timeout` is socket-inactivity based, so a response that keeps trickling data (SSE-over-HTTP, LLM token streams, chunked keep-alive) never tripped it, and because the concurrency runner awaits each batch with `Promise.all`, a single hung request stalled the entire probe. Each request now has a **hard wall-clock abort** (`AbortController`) that fires regardless of socket activity.
+
+### Added
+
+- `probe.hardTimeoutMs` — hard per-request deadline (default `timeoutMs + 2000`). Cancels a request even if it is actively streaming.
+- `probe.maxProbeMs` — optional overall run deadline; when set, in-flight requests are aborted and remaining endpoints are recorded as deadline-exceeded.
+- `probe.maxResponseBytes` — cap on buffered response size (default 25 MB) so a flooding endpoint can't be read into memory unbounded.
+- Hung/aborted requests are reported as the `timeout` root cause (the classifier now also recognizes `deadline`/`canceled`).
+
+---
+
 ## [2.3.1] - 2026-06-21
 
 ### Added

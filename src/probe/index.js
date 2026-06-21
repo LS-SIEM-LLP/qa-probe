@@ -37,10 +37,23 @@ async function runProbe(graph, config) {
   const sseEndpoints = endpoints.filter(e => e.type === 'sse');
   const wsEndpoints = endpoints.filter(e => e.type === 'ws');
 
-  // 4. HTTP probing with concurrency limit
+  // 4. HTTP probing with concurrency limit.
+  // Optional overall deadline (config.probe.maxProbeMs) is a final backstop so a
+  // cluster of slow endpoints can't run unbounded. Each request also has its own
+  // hard wall-clock abort (see endpoint-runner), so a single hung stream can never
+  // stall the run regardless of this setting.
+  const maxProbeMs = config.probe && config.probe.maxProbeMs;
+  const runController = maxProbeMs ? new AbortController() : null;
+  let deadlineHit = false;
+  const runKiller = runController
+    ? setTimeout(() => { deadlineHit = true; runController.abort(); }, maxProbeMs)
+    : null;
+
   let done = 0;
   const probeOne = async (endpoint) => {
-    const result = await probeEndpoint(endpoint, headers, http, graph, config);
+    const result = await probeEndpoint(
+      endpoint, headers, http, graph, config, 0, runController ? runController.signal : null,
+    );
     const key = `${endpoint.method} ${endpoint.path}`;
     results[key] = result;
     done++;
@@ -50,10 +63,17 @@ async function runProbe(graph, config) {
     return result;
   };
 
-  await runConcurrent(httpEndpoints, probeOne, {
-    concurrency: config.probe.concurrency || 5,
-    delayMs: config.probe.delayMs || 50,
-  });
+  try {
+    await runConcurrent(httpEndpoints, probeOne, {
+      concurrency: config.probe.concurrency || 5,
+      delayMs: config.probe.delayMs || 50,
+    });
+  } finally {
+    if (runKiller) clearTimeout(runKiller);
+  }
+  if (deadlineHit) {
+    spinner.warn(`HTTP probe hit the overall deadline (${maxProbeMs}ms); remaining endpoints recorded as deadline-exceeded.`);
+  }
   spinner.succeed(`HTTP: ${httpEndpoints.length} endpoints probed`);
 
   // 5. SSE checking

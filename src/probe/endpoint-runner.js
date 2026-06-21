@@ -8,12 +8,58 @@ const { createTraceContext, correlateTrace } = require('./otel-correlator');
 const MAX_RETRIES = 2;
 
 /**
+ * Resolve the hard per-request deadline (ms).
+ * axios `timeout` is socket-inactivity based, so a response that keeps trickling
+ * data (streaming / SSE-over-HTTP / LLM token stream) never trips it. This is a
+ * wall-clock cap that fires regardless of socket activity. Defaults to a small
+ * margin beyond `timeoutMs` so ordinary idle timeouts still report via axios.
+ */
+function resolveHardTimeoutMs(config) {
+  const p = (config && config.probe) || {};
+  if (p.hardTimeoutMs) return p.hardTimeoutMs;
+  const base = p.timeoutMs || 10000;
+  return base + 2000;
+}
+
+function abortedResult(routeKey, attempt, error, ms = 0) {
+  return {
+    status: null,
+    ms,
+    routeKey,
+    error,
+    empty: false,
+    itemCount: null,
+    schemaValid: null,
+    schemaErrors: [],
+    retries: attempt,
+    timedOut: true,
+  };
+}
+
+/**
  * Probe a single HTTP endpoint.
  * Returns a probe result object.
+ *
+ * @param {AbortSignal|null} runSignal optional overall-run deadline signal; when it
+ *   aborts, in-flight requests are cancelled and not-yet-started ones short-circuit.
  */
-async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0) {
+async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0, runSignal = null) {
   const { path: endpointPath, method, routeKey } = endpoint;
   const start = Date.now();
+
+  // Overall run deadline already exceeded — don't even start this request.
+  if (runSignal && runSignal.aborted) {
+    return abortedResult(routeKey, attempt, 'probe run deadline exceeded');
+  }
+
+  // Hard per-request wall-clock abort: guarantees this request (and its concurrency
+  // slot) can never hang indefinitely, even on a continuously-streaming response.
+  const controller = new AbortController();
+  const hardMs = resolveHardTimeoutMs(config);
+  let timedOut = false;
+  const killer = setTimeout(() => { timedOut = true; controller.abort(); }, hardMs);
+  const onRunAbort = () => controller.abort();
+  if (runSignal) runSignal.addEventListener('abort', onRunAbort, { once: true });
 
   let result;
   try {
@@ -34,6 +80,9 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       url: endpointPath,
       headers: requestHeaders,
       data: requestBody,
+      // Hard wall-clock abort (see resolveHardTimeoutMs) — covers streaming responses
+      // that axios `timeout` would never cancel.
+      signal: controller.signal,
       // Accept JSON and event-stream (for endpoints that might be either)
       validateStatus: () => true,
     });
@@ -42,8 +91,11 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     if (res.status === 429 && attempt < MAX_RETRIES) {
       const retryAfter = res.headers['retry-after'];
       const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempt) * 1000;
+      // Stop this attempt's deadline before backing off, then retry with a fresh one.
+      clearTimeout(killer);
+      if (runSignal) runSignal.removeEventListener('abort', onRunAbort);
       await new Promise(r => setTimeout(r, waitMs));
-      return probeEndpoint(endpoint, headers, http, graph, config, attempt + 1);
+      return probeEndpoint(endpoint, headers, http, graph, config, attempt + 1, runSignal);
     }
 
     const ms = Date.now() - start;
@@ -119,20 +171,30 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     };
   } catch (err) {
     const ms = Date.now() - start;
+    const runAborted = !!(runSignal && runSignal.aborted) && !timedOut;
+    const error = timedOut
+      ? `hard timeout: response did not complete within ${hardMs}ms (possible streaming/long-poll endpoint)`
+      : runAborted
+        ? 'probe run deadline exceeded'
+        : err.message;
     result = {
       status: null,
       ms,
       routeKey,
-      error: err.message,
+      error,
       empty: false,
       itemCount: null,
       schemaValid: null,
       schemaErrors: [],
       retries: attempt,
+      timedOut: timedOut || runAborted,
     };
+  } finally {
+    clearTimeout(killer);
+    if (runSignal) runSignal.removeEventListener('abort', onRunAbort);
   }
 
   return result;
 }
 
-module.exports = { probeEndpoint };
+module.exports = { probeEndpoint, resolveHardTimeoutMs };
