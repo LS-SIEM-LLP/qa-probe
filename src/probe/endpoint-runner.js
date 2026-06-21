@@ -21,7 +21,30 @@ function resolveHardTimeoutMs(config) {
   return base + 2000;
 }
 
-function abortedResult(routeKey, attempt, error, ms = 0) {
+const MAX_SAMPLE_CHARS = 800;
+
+/**
+ * A bounded, serialized snapshot of a response body — the raw evidence an AI (or
+ * human) needs to judge a result for themselves. Truncated so a large/streaming
+ * body can't bloat the report. NOTE: this is the response, never the request
+ * headers, so the auth token is never captured here.
+ */
+function sampleBody(body) {
+  if (body === undefined || body === null) return null;
+  let s;
+  try {
+    s = typeof body === 'string' ? body : JSON.stringify(body);
+  } catch {
+    s = String(body);
+  }
+  if (s == null) return null;
+  if (s.length > MAX_SAMPLE_CHARS) {
+    return `${s.slice(0, MAX_SAMPLE_CHARS)}… [truncated, ${s.length} chars total]`;
+  }
+  return s;
+}
+
+function abortedResult(routeKey, attempt, error, method, path, ms = 0) {
   return {
     status: null,
     ms,
@@ -33,6 +56,12 @@ function abortedResult(routeKey, attempt, error, ms = 0) {
     schemaErrors: [],
     retries: attempt,
     timedOut: true,
+    evidence: {
+      request: { method: (method || '').toUpperCase(), path: path || null },
+      response: null,
+      error,
+      timing: { ms },
+    },
   };
 }
 
@@ -49,7 +78,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
 
   // Overall run deadline already exceeded — don't even start this request.
   if (runSignal && runSignal.aborted) {
-    return abortedResult(routeKey, attempt, 'probe run deadline exceeded');
+    return abortedResult(routeKey, attempt, 'probe run deadline exceeded', method, endpointPath);
   }
 
   // Hard per-request wall-clock abort: guarantees this request (and its concurrency
@@ -168,6 +197,19 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       retries: attempt,
       traceId: traceContext ? traceContext.traceId : null,
       otel,
+      // Verifiable evidence: the request issued and a bounded snapshot of what the
+      // server actually returned, so a consumer never has to trust the label blind.
+      evidence: {
+        request: { method: method.toUpperCase(), path: endpointPath },
+        response: {
+          status: res.status,
+          contentType: res.headers['content-type'] || null,
+          bodyType: Array.isArray(body) ? 'array' : (body === null ? 'null' : typeof body),
+          itemCount,
+          sample: sampleBody(body),
+        },
+        timing: { ms },
+      },
     };
   } catch (err) {
     const ms = Date.now() - start;
@@ -188,6 +230,12 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       schemaErrors: [],
       retries: attempt,
       timedOut: timedOut || runAborted,
+      evidence: {
+        request: { method: method.toUpperCase(), path: endpointPath },
+        response: null,
+        error,
+        timing: { ms },
+      },
     };
   } finally {
     clearTimeout(killer);

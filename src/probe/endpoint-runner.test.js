@@ -78,3 +78,41 @@ describe('endpoint-runner overall run deadline', () => {
     assert.match(r.error, /deadline/i);
   });
 });
+
+describe('endpoint-runner evidence capture', () => {
+  const okHttp = (data, status = 200, headers = { 'content-type': 'application/json' }) =>
+    ({ request: async () => ({ status, data, headers }) });
+
+  test('a successful probe captures request, response sample, and timing', async () => {
+    const r = await probeEndpoint({ path: '/users', method: 'GET' }, {}, okHttp([{ id: 1 }, { id: 2 }]), graph(), { probe: {} });
+    assert.equal(r.status, 200);
+    assert.ok(r.evidence, 'evidence present on every result');
+    assert.equal(r.evidence.request.method, 'GET');
+    assert.equal(r.evidence.request.path, '/users');
+    assert.equal(r.evidence.response.status, 200);
+    assert.match(r.evidence.response.sample, /id/);
+    assert.equal(typeof r.evidence.timing.ms, 'number');
+  });
+
+  test('evidence never includes request headers (no auth-token leak)', async () => {
+    const headers = { Authorization: 'Bearer super-secret-token' };
+    const r = await probeEndpoint({ path: '/users', method: 'GET' }, headers, okHttp([]), graph(), { probe: {} });
+    assert.equal(JSON.stringify(r.evidence).includes('super-secret-token'), false);
+    assert.equal('headers' in r.evidence.request, false);
+  });
+
+  test('a large body is truncated in the evidence sample', async () => {
+    const r = await probeEndpoint({ path: '/big', method: 'GET' }, {}, okHttp({ blob: 'x'.repeat(5000) }), graph(), { probe: {} });
+    assert.ok(r.evidence.response.sample.length < 1000, 'sample is bounded');
+    assert.match(r.evidence.response.sample, /truncated/);
+  });
+
+  test('a failed/aborted probe still captures evidence (error, no response)', async () => {
+    const cfg = { probe: { timeoutMs: 30, hardTimeoutMs: 60 } };
+    const r = await probeEndpoint({ path: '/stream', method: 'GET' }, {}, hangingHttp(), graph(), cfg);
+    assert.equal(r.status, null);
+    assert.ok(r.evidence);
+    assert.equal(r.evidence.response, null);
+    assert.match(r.evidence.error, /timeout/i);
+  });
+});

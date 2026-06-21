@@ -272,8 +272,10 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
 
   return {
     rootCause: 'unknown',
-    rootCauseDetail: `${endpointKey} → status=${status}, error=${error || 'none'}`,
-    fixHint: null,
+    rootCauseDetail: `${endpointKey} → status=${status}, error=${error || 'none'}. No classifier rule matched this signal, so this is an UNCLASSIFIED result — not a confirmed pass. Inspect the captured evidence (raw status + response sample) to determine the cause; if the pattern recurs, add a root-cause rule for it.`,
+    fixHint: 'Open the endpoint evidence to see what the server actually returned. If this status/shape is expected, add a rule or mark it as expected; if not, treat it as a real failure — do not assume it passed.',
+    confidence: 'none',
+    unmatched: true,
   };
 }
 
