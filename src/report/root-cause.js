@@ -42,6 +42,9 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
       rootCause: finding.rootCause,
       rootCauseDetail: finding.detail || `${endpointKey} -> ${finding.rootCause}`,
       fixHint: hints[finding.rootCause] || null,
+      // auth_bypass / privilege_escalation are deterministic (an unauthorized
+      // persona reached the route); pii_leak is a regex heuristic.
+      confidence: finding.confidence || (finding.rootCause === 'pii_leak' ? 'medium' : 'high'),
     };
   }
 

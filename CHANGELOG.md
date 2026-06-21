@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.7.0] - 2026-06-21
+
+### Added — Security checks (auth-bypass, privilege escalation, PII)
+
+qa-probe knows every endpoint your app calls, so it can now verify *access*, not just data. Opt in with a `security: { enabled: true }` config block. Previously-written but unwired persona/security modules are now connected to the probe pipeline.
+
+- **`auth_bypass`** (zero config) — re-probes every authed-`200` GET with no credentials; a still-`200` response means the endpoint is missing its auth guard.
+- **`privilege_escalation`** — runs a per-persona access matrix and flags any role that reached a route your `policies` forbid.
+- **`pii_leak`** — scans response bodies for SSN / credit-card / phone / email patterns not on `piiAllow`.
+- All security re-probing is **GET-only — it never issues a write.**
+- Findings surface as high-severity diagnostics, penalize the score (`scoring.securityIssue`, default −50), and carry calibrated confidence (auth_bypass / privilege_escalation = high; pii_leak = medium).
+
+---
+
 ## [2.6.0] - 2026-06-21
 
 ### Added — Adaptive baselines (deviation-from-itself)

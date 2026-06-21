@@ -71,6 +71,14 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
         score += (weights.serverError || -40);
         penalties.push({ probeKey, reason: 'server_error', delta: weights.serverError || -40 });
         break;
+      case 'auth_bypass':
+      case 'privilege_escalation':
+      case 'pii_leak':
+        // Security findings are among the most severe — an unguarded endpoint or a
+        // PII leak should dominate the route score.
+        score += (weights.securityIssue || -50);
+        penalties.push({ probeKey, reason: rootCause, delta: weights.securityIssue || -50 });
+        break;
       case 'slow_but_working':
       case 'slow_app':
       case 'slow_dependency':
