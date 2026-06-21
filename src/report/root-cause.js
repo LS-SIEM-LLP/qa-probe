@@ -48,6 +48,18 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
     };
   }
 
+  // A declared response invariant was violated on a 2xx response — a logic/contract
+  // bug the app actually returned. Deterministic, so high confidence.
+  if (probeResult.assertionFailures && probeResult.assertionFailures.length) {
+    const fails = probeResult.assertionFailures;
+    return {
+      rootCause: 'assertion_failed',
+      rootCauseDetail: `${endpointKey} → ${fails.length} assertion(s) failed: ${fails.slice(0, 5).join('; ')}`,
+      fixHint: 'The endpoint returned 2xx but the response violated a declared invariant. Fix the backend response, or update the assertion if the contract changed intentionally.',
+      confidence: 'high',
+    };
+  }
+
   if (probeResult.anomaly) {
     return {
       rootCause: 'anomaly_vs_baseline',

@@ -63,6 +63,11 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
         score += (weights.schemaMismatch || -25);
         penalties.push({ probeKey, reason: rootCause, delta: weights.schemaMismatch || -25 });
         break;
+      case 'assertion_failed':
+        // A declared invariant was violated — a real logic/contract bug.
+        score += (weights.assertionFailed || -30);
+        penalties.push({ probeKey, reason: 'assertion_failed', delta: weights.assertionFailed || -30 });
+        break;
       case 'stream_dead':
         score += (weights.streamDead || -35);
         penalties.push({ probeKey, reason: 'stream_dead', delta: weights.streamDead || -35 });

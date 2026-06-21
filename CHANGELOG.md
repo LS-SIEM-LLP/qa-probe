@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.8.0] - 2026-06-21
+
+### Added — Read-only response assertions (catch logic bugs)
+
+A smoke probe checks that an endpoint responds; assertions check that the response is *correct*. Declare invariants per endpoint and qa-probe verifies them on every 2xx response — catching enum drift, bad counts, broken pagination, and missing/renamed fields. Purely inspects the response body; **no writes.**
+
+- New `assertions` config keyed by `"METHOD path"`. Checks: `present`, `type`, `in`, `pattern`, `gte`/`lte`/`gt`/`lt`, `nonEmpty`, `minItems`/`maxItems`. Field paths support dot notation and array wildcards (`items[].user.id`).
+- Violations classify as `assertion_failed` (high confidence, high severity, `scoring.assertionFailed` default −30) with the exact field + value that failed.
+
+---
+
 ## [2.7.0] - 2026-06-21
 
 ### Added — Security checks (auth-bypass, privilege escalation, PII)

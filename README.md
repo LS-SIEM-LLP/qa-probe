@@ -314,6 +314,26 @@ security: {
 
 All re-probing is **GET-only — it never issues a write.** Findings surface as high-severity diagnostics, dock the score (`scoring.securityIssue`, default −50), and carry calibrated confidence (`auth_bypass`/`privilege_escalation` = high, `pii_leak` = medium).
 
+### Logic assertions (read-only)
+
+A smoke probe checks that an endpoint *responds*; assertions check that the response is *correct*. Declare invariants per endpoint and qa-probe verifies them on every 2xx response — catching logic bugs (enum drift, bad counts, broken pagination, missing/renamed fields) without writing anything:
+
+```js
+// qa-probe.config.js
+assertions: {
+  'GET /alerts': [
+    { field: 'items[].severity', in: ['low','medium','high','critical'] },
+    { field: 'total', gte: 0 },
+    { field: 'items', type: 'array', maxItems: 100 },
+  ],
+  'GET /users/{id}': [
+    { field: 'email', present: true, pattern: '@' },
+  ],
+},
+```
+
+Checks: `present`, `type`, `in`, `pattern`, `gte`/`lte`/`gt`/`lt`, `nonEmpty`, `minItems`/`maxItems`. Paths support dot notation and array wildcards (`items[].user.id`). A violation is classified `assertion_failed` (high confidence, high severity, `scoring.assertionFailed` default −30) with the exact field and value that failed. Purely reads the response — **no writes.**
+
 ---
 
 ## CI / GitHub Actions
