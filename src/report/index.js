@@ -2,6 +2,8 @@
 
 const { classifyEndpoint, clusterRootCauses } = require('./root-cause');
 const { applyFeedback } = require('../feedback/store');
+const { computeBaselines } = require('../learn/baselines');
+const { detectAnomalies } = require('../learn/anomaly-detector');
 const { scoreRoute, scoreOverall } = require('./scorer');
 const { getBlastRadiusSummary } = require('./blast-radius');
 const { detectRegression } = require('./regression');
@@ -12,11 +14,19 @@ const { writeHtmlReport } = require('./formatters/html');
 const { writeCoverageMarkdown } = require('./formatters/coverage-md');
 const { generateCoverage } = require('./coverage');
 const { saveReport } = require('../cache');
-const { loadPreviousRun, saveToHistory } = require('../cache/history');
+const { loadPreviousRun, loadRecentRuns, saveToHistory } = require('../cache/history');
 
 async function runReport(graph, probeResults, config) {
   const spinner = createSpinner();
   const effectiveProbeResults = enrichProbeResultsWithRouteKeys(graph, probeResults, config);
+
+  // 0. Adaptive baselines: learn each endpoint's "normal" from recent history and
+  // flag this run's deviations. Only attach to otherwise-healthy responses (2xx,
+  // non-empty, schema-clean) so an anomaly label can never mask a real failure —
+  // it surfaces "this passing endpoint is behaving abnormally", nothing more.
+  const historyRuns = loadRecentRuns(config, (config.report && config.report.baselineRuns) || 20);
+  const baselines = computeBaselines(historyRuns);
+  const anomaliesFlagged = attachBaselineAnomalies(effectiveProbeResults, baselines);
 
   // 1. Classify every probed endpoint
   spinner.start('Classifying root causes...');
@@ -154,6 +164,15 @@ async function runReport(graph, probeResults, config) {
       suppressed: feedbackApplied.filter(f => f.effect === 'suppress').length,
       confirmed: feedbackApplied.filter(f => f.effect === 'confirm').length,
     },
+    // Per-endpoint metrics for EVERY probed endpoint — the raw material future
+    // runs use to learn each endpoint's baseline.
+    endpointMetrics: buildEndpointMetrics(effectiveProbeResults),
+    // What the adaptive baseline pass learned and flagged this run.
+    baselines: {
+      runsAnalyzed: historyRuns.length,
+      endpointsWithBaseline: Object.keys(baselines).length,
+      anomaliesFlagged,
+    },
     regression: null,
     parseWarnings: graph.warnings || [],
     schemaDrift: filterSchemaDrift((probeResults && probeResults.__schemaDrift) || [], endpointRootCauses),
@@ -215,6 +234,44 @@ function fillPathParams(routePath, paramValues) {
   return routePath.replace(/\{([^}]+)\}/g, (_, name) => {
     return paramValues[name] || paramValues.id || '1';
   });
+}
+
+/**
+ * Attach baseline anomalies to probe results IN PLACE, but only to otherwise-healthy
+ * responses (2xx, non-empty, schema-clean) so an anomaly can never mask a real
+ * failure — it only surfaces "this passing endpoint is behaving abnormally".
+ * Returns how many were flagged.
+ */
+function attachBaselineAnomalies(probeResults, baselines) {
+  let flagged = 0;
+  for (const finding of detectAnomalies(probeResults, baselines)) {
+    const probe = probeResults[finding.endpoint];
+    const healthy = probe && typeof probe.status === 'number' &&
+      probe.status >= 200 && probe.status < 300 &&
+      !probe.empty && !(probe.schemaErrors && probe.schemaErrors.length) && !probe.anomaly;
+    if (!healthy) continue;
+    probe.anomaly = {
+      metric: finding.metric,
+      value: finding.value,
+      detail: finding.detail,
+      fixHint: 'This endpoint deviated from its own recent baseline — likely load, data volume, or a recent change, not necessarily a bug. Compare against recent healthy runs before acting.',
+    };
+    flagged++;
+  }
+  return flagged;
+}
+
+function buildEndpointMetrics(probeResults) {
+  const metrics = {};
+  for (const [key, probe] of Object.entries(probeResults || {})) {
+    if (key.startsWith('__') || !probe) continue;
+    metrics[key] = {
+      status: typeof probe.status === 'number' ? probe.status : null,
+      ms: typeof probe.ms === 'number' ? probe.ms : null,
+      itemCount: typeof probe.itemCount === 'number' ? probe.itemCount : null,
+    };
+  }
+  return metrics;
 }
 
 function buildEndpointDiagnostics(graph, probeResults, endpointRootCauses) {
@@ -364,6 +421,7 @@ function confidenceFor(rootCause, probe) {
   if (rootCause === 'sample_unavailable') return 'high';
   if (rootCause === 'empty_db') return 'medium';
   if (rootCause === 'unknown') return 'none';
+  if (rootCause === 'anomaly_vs_baseline') return 'medium';
   if (rootCause === 'sample_not_found') return 'high';
   if (rootCause === 'invalid_sample_params') return 'medium';
   if (rootCause === 'timeout') return 'medium';
@@ -397,4 +455,4 @@ function createSpinner() {
   }
 }
 
-module.exports = { runReport, buildEndpointDiagnostics };
+module.exports = { runReport, buildEndpointDiagnostics, attachBaselineAnomalies, buildEndpointMetrics };

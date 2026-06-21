@@ -50,6 +50,8 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
       rootCause: 'anomaly_vs_baseline',
       rootCauseDetail: probeResult.anomaly.detail,
       fixHint: probeResult.anomaly.fixHint || 'Compare this endpoint against recent healthy runs before treating it as an application failure.',
+      // A statistical deviation, not a confirmed defect — flag it, but don't claim certainty.
+      confidence: 'medium',
     };
   }
 

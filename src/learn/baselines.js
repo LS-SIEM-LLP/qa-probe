@@ -1,16 +1,29 @@
 'use strict';
 
+function addSample(grouped, endpoint, ms, responseSize, itemCount) {
+  if (!endpoint) return;
+  if (!grouped.has(endpoint)) grouped.set(endpoint, { latencies: [], sizes: [], cardinalities: [] });
+  const bucket = grouped.get(endpoint);
+  if (typeof ms === 'number') bucket.latencies.push(ms);
+  if (typeof responseSize === 'number') bucket.sizes.push(responseSize);
+  if (typeof itemCount === 'number') bucket.cardinalities.push(itemCount);
+}
+
 function computeBaselines(runs) {
   const grouped = new Map();
   for (const run of runs || []) {
-    const diagnostics = run.endpointDiagnostics || [];
-    for (const item of diagnostics) {
-      if (!item.endpoint) continue;
-      if (!grouped.has(item.endpoint)) grouped.set(item.endpoint, { latencies: [], sizes: [], cardinalities: [] });
-      const bucket = grouped.get(item.endpoint);
-      if (typeof item.ms === 'number') bucket.latencies.push(item.ms);
-      if (typeof item.responseSize === 'number') bucket.sizes.push(item.responseSize);
-      if (typeof item.itemCount === 'number') bucket.cardinalities.push(item.itemCount);
+    // Prefer endpointMetrics — it covers EVERY probed endpoint, including healthy
+    // ones, so a regression on a normally-passing endpoint can be detected. Fall
+    // back to endpointDiagnostics (issues only) for runs recorded before metrics.
+    const metrics = run.endpointMetrics;
+    if (metrics && typeof metrics === 'object') {
+      for (const [endpoint, m] of Object.entries(metrics)) {
+        addSample(grouped, endpoint, m.ms, m.responseSize, m.itemCount);
+      }
+    } else {
+      for (const item of run.endpointDiagnostics || []) {
+        addSample(grouped, item.endpoint, item.ms, item.responseSize, item.itemCount);
+      }
     }
   }
 
