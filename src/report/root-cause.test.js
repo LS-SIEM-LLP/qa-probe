@@ -308,6 +308,36 @@ describe('auth_scope_mismatch', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Rule 5b — precondition_required (428)
+// ---------------------------------------------------------------------------
+
+describe('precondition_required', () => {
+  test('428 → precondition_required', () => {
+    const result = classifyEndpoint('GET /alerts', probe({ status: 428 }), graph(), cfg);
+    assert.equal(result.rootCause, 'precondition_required');
+    assert.ok(result.rootCauseDetail.includes('428'));
+  });
+
+  test('428 is classified as precondition_required, not unknown', () => {
+    const result = classifyEndpoint('GET /compliance/tasks', probe({ status: 428 }), graph(), cfg);
+    assert.notEqual(result.rootCause, 'unknown');
+  });
+
+  test('fix hint mentions clearing the gate (terms/onboarding/MFA)', () => {
+    const result = classifyEndpoint('GET /alerts', probe({ status: 428 }), graph(), cfg);
+    const hint = result.fixHint.toLowerCase();
+    assert.ok(hint.includes('terms') || hint.includes('onboarding') || hint.includes('mfa'));
+  });
+
+  // The package must stay app-agnostic — no LightShield-specific leakage.
+  test('detail/hint contain no project-specific names', () => {
+    const result = classifyEndpoint('GET /alerts', probe({ status: 428 }), graph(), cfg);
+    assert.ok(!result.rootCauseDetail.includes('LightShield'));
+    assert.ok(!result.fixHint.includes('LightShield'));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Rule 6 — schema_mismatch
 // ---------------------------------------------------------------------------
 

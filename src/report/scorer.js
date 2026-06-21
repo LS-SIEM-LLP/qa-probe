@@ -49,6 +49,13 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
         score += (weights.authError || -30);
         penalties.push({ probeKey, reason: 'auth_scope_mismatch', delta: weights.authError || -30 });
         break;
+      case 'precondition_required':
+        // A 428 gate (terms/onboarding/MFA) blocks the endpoint from returning
+        // data just as surely as an auth failure does. Penalize it so a probe
+        // account that hasn't cleared the gate cannot inflate the score.
+        score += (weights.preconditionGate || -30);
+        penalties.push({ probeKey, reason: 'precondition_required', delta: weights.preconditionGate || -30 });
+        break;
       case 'schema_mismatch':
       case 'type_mismatch':
       case 'missing_required_field':
@@ -75,6 +82,14 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
       case 'timeout':
         score += (weights.slowResponse || -10);
         penalties.push({ probeKey, reason: rootCause, delta: weights.slowResponse || -10 });
+        break;
+      case 'unknown':
+        // An unclassified non-2xx response is still a real failure. Apply a small
+        // penalty so it shows up in the score rather than being silently free,
+        // which previously let large clusters of odd status codes (e.g. 428/429)
+        // hide behind a perfect-looking number.
+        score += (weights.unknown || -10);
+        penalties.push({ probeKey, reason: 'unknown', delta: weights.unknown || -10 });
         break;
     }
   }
