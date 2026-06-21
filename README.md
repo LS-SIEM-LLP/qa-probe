@@ -480,7 +480,21 @@ module.exports = {
     // Milliseconds to wait between requests in a batch.
 
     timeoutMs: 10000,
-    // Per-request timeout in milliseconds.
+    // Per-request timeout in milliseconds. Note: this maps to axios's socket-
+    // inactivity timeout, so it does NOT cancel a response that keeps streaming.
+
+    hardTimeoutMs: 12000,
+    // Hard per-request wall-clock deadline (default: timeoutMs + 2000). Fires
+    // regardless of socket activity, so a streaming/long-poll endpoint can never
+    // hang the probe. Reported as the `timeout` root cause when it triggers.
+
+    maxProbeMs: null,
+    // Optional overall deadline for the whole HTTP probe phase. When set, in-flight
+    // requests are aborted and remaining endpoints are recorded as deadline-exceeded.
+
+    maxResponseBytes: 26214400,
+    // Cap on buffered response size (default 25 MB). Guards against an endpoint that
+    // floods the socket being read into memory unbounded.
 
     ignoreHTTPSErrors: false,
     // Set true to accept self-signed TLS certificates. Dev/staging only.

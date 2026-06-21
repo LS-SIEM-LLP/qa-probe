@@ -10,6 +10,7 @@
  *  3. contract_mismatch      — fuzzy match finds backend route but exact path differs
  *  4. empty_db               — 200 + empty array/body + list endpoint
  *  5. auth_scope_mismatch    — 403
+ * 5b. precondition_required  — 428 (terms/license, onboarding, or MFA gate not satisfied)
  *  6. type_mismatch          — 200 + data present + wrong field type
  *  7. missing_required_field — 200 + data present + required field absent
  *  8. field_renamed          — 200 + bidirectional drift indicates rename
@@ -188,6 +189,20 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
     };
   }
 
+  // --- Rule 5b: precondition_required (428) ---
+  // The request is well-formed and the user is authenticated, but a one-time
+  // gate must be satisfied before the endpoint returns data — e.g. terms/license
+  // acceptance, an onboarding wizard, or MFA enrollment. This is a probe-account
+  // configuration issue, not a broken route, so it gets its own diagnosis instead
+  // of falling through to the generic `unknown` bucket.
+  if (status === 428) {
+    return {
+      rootCause: 'precondition_required',
+      rootCauseDetail: `${endpointKey} → 428 Precondition Required. The probe account has not satisfied a required gate (terms/license acceptance, onboarding, or MFA enrollment) before this endpoint will return data.`,
+      fixHint: 'Satisfy the gate for the QA service account (accept the current terms/license version, complete onboarding, or configure MFA), or exempt the service account from the gate. Then re-run.',
+    };
+  }
+
   if (status === 200) {
     // --- Rule 4: empty_db ---
     if (empty) {
@@ -247,7 +262,7 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   }
 
   // Anything else — not probed or unknown
-  if (status === null && error && /timeout|aborted|ECONNRESET|socket hang up/i.test(error)) {
+  if (status === null && error && /timeout|deadline|aborted|canceled|cancelled|ECONNRESET|socket hang up/i.test(error)) {
     return {
       rootCause: 'timeout',
       rootCauseDetail: `${endpointKey} -> ${error}`,
