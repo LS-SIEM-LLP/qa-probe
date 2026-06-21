@@ -5,6 +5,7 @@ const { collectEndpoints } = require('./sampler');
 const { probeEndpoint } = require('./endpoint-runner');
 const { checkSSE } = require('./sse-checker');
 const { checkWS } = require('./ws-checker');
+const { runSecurityChecks } = require('./security');
 const { runConcurrent } = require('./rate-limiter');
 const { createHttpClient } = require('../analyze/backend-fetcher');
 const { saveProbeResults } = require('../cache');
@@ -75,6 +76,16 @@ async function runProbe(graph, config) {
     spinner.warn(`HTTP probe hit the overall deadline (${maxProbeMs}ms); remaining endpoints recorded as deadline-exceeded.`);
   }
   spinner.succeed(`HTTP: ${httpEndpoints.length} endpoints probed`);
+
+  // 4b. Security pass (opt-in via config.security): anonymous auth-bypass re-probe,
+  // PII scan on responses, and an optional per-persona access matrix. GET-only, so
+  // it never issues a write. Attaches `securityFinding` to results for the report.
+  if (config.security && config.security.enabled) {
+    spinner.start('Running security checks...');
+    const probeAs = (endpoint, personaHeaders) => probeEndpoint(endpoint, personaHeaders || {}, http, graph, config);
+    const sec = await runSecurityChecks(httpEndpoints, results, config, probeAs);
+    spinner.succeed(`Security: ${sec.authBypass} auth-bypass, ${sec.privilegeEscalation} priv-esc, ${sec.piiLeak} PII (${sec.authBypassChecked} endpoints re-probed)`);
+  }
 
   // 5. SSE checking
   if (sseEndpoints.length > 0 && config.probe.sse && config.probe.sse.enabled) {

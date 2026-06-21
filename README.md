@@ -289,6 +289,31 @@ GET /cases → anomaly_vs_baseline (confidence: medium)
 - **Never masks a failure** — anomalies attach only to otherwise-healthy responses (2xx, non-empty, schema-clean). A `500` stays `server_error`, an empty result stays `empty_db`.
 - **Honest confidence** — flagged at `medium`, never claimed as a confirmed defect (it could be load or a data change). The report's `baselines` block shows runs analyzed, endpoints with a baseline, and anomalies flagged.
 
+### Security checks (opt-in)
+
+qa-probe already knows every endpoint your app calls — so it can verify *access*, not just data. Opt in with a `security` block:
+
+```js
+// qa-probe.config.js
+security: {
+  enabled: true,
+  // auth-bypass + PII work with ZERO extra config.
+  // Optional: probe each endpoint as different roles to catch privilege escalation.
+  personas: [
+    { name: 'anonymous', auth: { type: 'none' } },
+    { name: 'viewer',    auth: { type: 'bearer', token: process.env.QA_VIEWER_TOKEN } },
+  ],
+  policies: { viewer: { 'GET /admin/users': 403 } }, // who should be blocked from what
+  piiAllow: ['email'], // PII kinds that are expected/allowed in responses
+},
+```
+
+- **`auth_bypass`** (zero config) — re-probes every authed-`200` **GET** with *no* credentials. If it still returns `200`, the endpoint is missing its auth guard.
+- **`privilege_escalation`** — runs the persona matrix and flags any role that reached a route your `policies` say it shouldn't.
+- **`pii_leak`** — scans response bodies for SSN / credit-card / phone / email patterns not on `piiAllow`.
+
+All re-probing is **GET-only — it never issues a write.** Findings surface as high-severity diagnostics, dock the score (`scoring.securityIssue`, default −50), and carry calibrated confidence (`auth_bypass`/`privilege_escalation` = high, `pii_leak` = medium).
+
 ---
 
 ## CI / GitHub Actions
