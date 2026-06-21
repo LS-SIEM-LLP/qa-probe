@@ -75,6 +75,15 @@ describe('buildEndpointDiagnostics', () => {
     assert.equal(diagnostics[0].confidence, 'high');
   });
 
+  test('an acknowledged (feedback-suppressed) endpoint is dropped from issue diagnostics', () => {
+    const diagnostics = buildEndpointDiagnostics(
+      { frontendRoutes: { '/alerts': { apiCalls: [{ method: 'GET', backendPath: '/alerts' }] } } },
+      { 'GET /alerts': { status: 200, empty: true } },
+      { 'GET /alerts': { rootCause: 'acknowledged', acknowledged: true, priorRootCause: 'empty_db' } },
+    );
+    assert.deepEqual(diagnostics, []);
+  });
+
   test('suppresses expected-empty and generated-sample statuses from issue diagnostics', () => {
     const diagnostics = buildEndpointDiagnostics(
       {

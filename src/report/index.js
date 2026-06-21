@@ -1,6 +1,7 @@
 'use strict';
 
 const { classifyEndpoint, clusterRootCauses } = require('./root-cause');
+const { applyFeedback } = require('../feedback/store');
 const { scoreRoute, scoreOverall } = require('./scorer');
 const { getBlastRadiusSummary } = require('./blast-radius');
 const { detectRegression } = require('./regression');
@@ -24,6 +25,12 @@ async function runReport(graph, probeResults, config) {
     if (endpointKey.startsWith('__')) continue;
     endpointRootCauses[endpointKey] = classifyEndpoint(endpointKey, probe, graph, config);
   }
+
+  // 1b. Apply persisted human/AI feedback onto the classifications. Suppress
+  // verdicts become `acknowledged` (a non-issue); confirm verdicts mark the
+  // diagnosis confirmed. Labels only apply while the observed rootCause still
+  // matches, so feedback can never hide a regression.
+  const feedbackApplied = applyFeedback(endpointRootCauses, config);
 
   // Cluster pass for groups of 5+ failures
   const clusters = clusterRootCauses(endpointRootCauses);
@@ -140,6 +147,13 @@ async function runReport(graph, probeResults, config) {
     endpointDiagnostics,
     coverage,
     clusters,
+    // Transparent record of what persisted feedback changed this run — suppression
+    // is never silent.
+    feedback: {
+      applied: feedbackApplied,
+      suppressed: feedbackApplied.filter(f => f.effect === 'suppress').length,
+      confirmed: feedbackApplied.filter(f => f.effect === 'confirm').length,
+    },
     regression: null,
     parseWarnings: graph.warnings || [],
     schemaDrift: filterSchemaDrift((probeResults && probeResults.__schemaDrift) || [], endpointRootCauses),
@@ -302,6 +316,7 @@ function displayCause(rootCause) {
     invalid_sample_params: 'invalid_sample',
     timeout: 'timeout',
     unknown: 'needs_review',
+    acknowledged: 'acknowledged',
   };
   return labels[rootCause] || rootCause || 'needs_review';
 }
@@ -358,7 +373,8 @@ function confidenceFor(rootCause, probe) {
 }
 
 function isNonIssueRootCause(rootCause) {
-  return !rootCause || rootCause === 'ok' || rootCause === 'expected_empty' || rootCause === 'sample_unavailable';
+  return !rootCause || rootCause === 'ok' || rootCause === 'expected_empty' ||
+    rootCause === 'sample_unavailable' || rootCause === 'acknowledged';
 }
 
 function createSpinner() {
