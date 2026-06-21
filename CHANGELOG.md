@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.6.0] - 2026-06-21
+
+### Added — Adaptive baselines (deviation-from-itself)
+
+qa-probe now learns each endpoint's normal from recent history and flags this run's deviations — completing the learning loop without any model.
+
+- **Baseline anomaly detection wired into the report pipeline.** Latency and row-count (cardinality) baselines are computed from recent runs; an endpoint that deviates >3σ from its own history is flagged as `anomaly_vs_baseline`.
+- **`endpointMetrics`** is now recorded for *every* probed endpoint (status, ms, itemCount), so baselines cover healthy endpoints — not just ones that were already failing.
+- **Never masks a real failure** — anomalies attach only to otherwise-healthy responses (2xx, non-empty, schema-clean). A `500` keeps `server_error`; an empty result keeps `empty_db`.
+- **Honest confidence** — anomalies are `medium` confidence (could be load or a data change, not a confirmed defect). The report gains a `baselines` block (runs analyzed, endpoints with a baseline, anomalies flagged). Tunable via `report.baselineRuns` (default 20).
+
+---
+
 ## [2.5.0] - 2026-06-21
 
 ### Added — Feedback writeback (first piece of the learning loop)

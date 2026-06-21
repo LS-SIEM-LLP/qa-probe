@@ -276,6 +276,19 @@ Via MCP, an AI calls **`qa_probe_label`** with the same arguments — so an assi
 - **Honesty guard** — a label can be scoped to the rootCause it was made for (`--signal empty_db`). If the endpoint's behavior later changes (e.g. starts returning `500`), the label **auto-revokes** so a stale "expected" can never hide a regression.
 - **Transparent** — suppression is never silent: the report's `feedback` block lists every label applied this run, by whom, and why. Stored in `<output.dir>/feedback.json` (point `feedbackFile` at a committed path to share across a team/CI).
 
+### Adaptive baselines
+
+qa-probe learns each endpoint's *normal* from recent runs (latency and row-count distributions) and flags **deviation from itself** — a passing endpoint whose latency spikes or whose result set collapses from its usual size:
+
+```
+GET /cases → anomaly_vs_baseline (confidence: medium)
+  Historical cardinality: 100-100; this run: 3
+```
+
+- **Self-improving** — baselines are recomputed from history every run, so they adapt as your app's normal shifts. No model, no training step.
+- **Never masks a failure** — anomalies attach only to otherwise-healthy responses (2xx, non-empty, schema-clean). A `500` stays `server_error`, an empty result stays `empty_db`.
+- **Honest confidence** — flagged at `medium`, never claimed as a confirmed defect (it could be load or a data change). The report's `baselines` block shows runs analyzed, endpoints with a baseline, and anomalies flagged.
+
 ---
 
 ## CI / GitHub Actions
