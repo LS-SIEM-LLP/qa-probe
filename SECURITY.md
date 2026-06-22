@@ -8,7 +8,7 @@ Report privately, and we'll work with you on a fix and coordinated disclosure:
 
 - **Preferred:** GitHub → the repository's **Security** tab → **Report a vulnerability**
   (private GitHub Security Advisory).
-- **Alternatively:** email `security@ls-siem.example` <!-- TODO: replace with your real security contact -->.
+- **Alternatively:** email **contact@lightshieldsiem.in**.
 
 Please include: affected version, a description, reproduction steps, and the
 impact you observed. We aim to acknowledge within **3 business days** and to

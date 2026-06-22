@@ -246,6 +246,7 @@ You don't need to know the tool names. Just ask naturally:
 | `qa_probe_suggest_fix` | "What should I do about feature_flag_disabled issues?" |
 | `qa_probe_get_blast_radius` | "What pages break if the users endpoint goes down?" |
 | `qa_probe_run_analysis` | "Run a full QA check and give me the summary" |
+| `qa_probe_label` | "Mark the empty /alerts result as expected" (records feedback, reapplied on future runs) |
 
 > **Note:** MCP output has SQL errors, stack traces, and table names redacted before they reach the AI. The raw data stays on disk.
 
@@ -707,6 +708,8 @@ qa-probe run       [--config <path>] [--fail-under <N>]   Full pipeline (analyze
 qa-probe analyze   [--config <path>]                       Phase 1 only — build dependency graph
 qa-probe probe     [--config <path>]                       Phase 2 only — probe all endpoints
 qa-probe report    [--config <path>] [--fail-under <N>]   Phase 3 only — score + classify + output
+qa-probe label <endpoint> <verdict> [-r <reason>]          Record feedback, reapplied on future runs
+qa-probe fix       [--config <path>] [--apply] [--pr]      Generate remediation diffs from the report
 qa-probe mcp       [--config <path>]                       Start MCP server over stdio
 ```
 
