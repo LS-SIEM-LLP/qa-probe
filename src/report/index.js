@@ -173,6 +173,8 @@ async function runReport(graph, probeResults, config) {
       endpointsWithBaseline: Object.keys(baselines).length,
       anomaliesFlagged,
     },
+    // Write-flow (CRUD-chain) results, if the opt-in writeFlows pass ran.
+    writeFlows: (probeResults && probeResults.__writeFlows) || null,
     regression: null,
     parseWarnings: graph.warnings || [],
     schemaDrift: filterSchemaDrift((probeResults && probeResults.__schemaDrift) || [], endpointRootCauses),

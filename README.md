@@ -334,6 +334,31 @@ assertions: {
 
 Checks: `present`, `type`, `in`, `pattern`, `gte`/`lte`/`gt`/`lt`, `nonEmpty`, `minItems`/`maxItems`. Paths support dot notation and array wildcards (`items[].user.id`). A violation is classified `assertion_failed` (high confidence, high severity, `scoring.assertionFailed` default −30) with the exact field and value that failed. Purely reads the response — **no writes.**
 
+### Write-flows (opt-in, MUTATES DATA)
+
+> ⚠️ **This issues real writes.** It is OFF unless `writeFlows.enabled === true`, every flow is explicitly defined, and every created resource is deleted at the end of its flow (even on failure). **Use a disposable / test-tenant environment only — never production.**
+
+Test full CRUD chains — create → read → update → delete — to catch write-path and logic bugs a read-only probe can't:
+
+```js
+// qa-probe.config.js
+writeFlows: {
+  enabled: true,
+  flows: [
+    {
+      name: 'alert-crud',
+      create: { method: 'POST', path: '/alerts', body: { title: 'qa-probe test', severity: 'low' } },
+      read:   { path: '/alerts/{id}' },                       // {id} = the created id
+      update: { method: 'PATCH', path: '/alerts/{id}', body: { status: 'closed' } },
+      delete: { path: '/alerts/{id}' },                       // cleanup — always runs
+      idField: 'id',                                          // where the created id lives in the response
+    },
+  ],
+},
+```
+
+Each step asserts a 2xx; the final `delete` cleans up and is verified gone. Results appear in the report's `writeFlows` block (per-flow pass/fail + cleanup status). For a multi-tenant app like a SIEM, point it at a throwaway tenant so it never touches real data.
+
 ---
 
 ## CI / GitHub Actions
