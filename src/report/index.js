@@ -374,6 +374,7 @@ function displayCause(rootCause) {
     timeout: 'timeout',
     unknown: 'needs_review',
     acknowledged: 'acknowledged',
+    assertion_failed: 'logic_violation',
   };
   return labels[rootCause] || rootCause || 'needs_review';
 }
@@ -388,6 +389,7 @@ function severityFor(rootCause) {
     case 'type_mismatch':
     case 'missing_required_field':
     case 'field_renamed':
+    case 'assertion_failed':
     case 'data_received_not_rendered':
     case 'stream_dead':
     case 'privilege_escalation':

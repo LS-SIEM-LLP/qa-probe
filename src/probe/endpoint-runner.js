@@ -4,6 +4,7 @@ const { validateSchema } = require('./schema-validator');
 const { generateBody, resolvePostBodyMode, requestBodySchema } = require('./body-generator');
 const { inferShape } = require('./schema-history');
 const { createTraceContext, correlateTrace } = require('./otel-correlator');
+const { evaluateAssertions, assertionsForEndpoint } = require('./assertions');
 
 const MAX_RETRIES = 2;
 
@@ -181,6 +182,16 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       }
     }
 
+    // Read-only response assertions: check declared invariants on the 2xx body.
+    let assertionFailures = null;
+    if (res.status >= 200 && res.status < 300) {
+      const rules = assertionsForEndpoint(config, method, endpointPath);
+      if (rules) {
+        const failures = evaluateAssertions(body, rules);
+        if (failures.length) assertionFailures = failures;
+      }
+    }
+
     result = {
       status: res.status,
       ms,
@@ -197,6 +208,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       retries: attempt,
       traceId: traceContext ? traceContext.traceId : null,
       otel,
+      assertionFailures,
       // Verifiable evidence: the request issued and a bounded snapshot of what the
       // server actually returned, so a consumer never has to trust the label blind.
       evidence: {
