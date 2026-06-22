@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.9.0] - 2026-06-21
+
+### Added — ID chaining (kills unseeded-DB noise)
+
+Detail routes were probed with a guessed id (`/cases/1`), which 404s on an unseeded database and produced most of the `sample_not_found` / `invalid_sample_params` noise. qa-probe now discovers real ids.
+
+- The HTTP probe runs in two phases: param-less **collections** first, then **detail routes**. A real id is harvested from each collection response and used for the matching detail route (`/cases/{id}` → `/cases/<real id>`).
+- Pure read, **no extra requests** (collections are already in the probe set). Falls back to `pathParamValues` when nothing is discovered.
+- On by default; disable with `probe.idDiscovery: false`. The run summary reports how many detail routes used a discovered id.
+
+---
+
 ## [2.8.0] - 2026-06-21
 
 ### Added — Read-only response assertions (catch logic bugs)

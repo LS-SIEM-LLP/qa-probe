@@ -45,6 +45,28 @@ function sampleBody(body) {
   return s;
 }
 
+/**
+ * The first list item's scalar fields — just enough for ID discovery to harvest a
+ * real id from a collection response. Scalars only, so it stays tiny.
+ */
+function firstScalarItem(body) {
+  let arr = null;
+  if (Array.isArray(body)) arr = body;
+  else if (body && typeof body === 'object') {
+    for (const k of ['data', 'items', 'results', 'records']) {
+      if (Array.isArray(body[k])) { arr = body[k]; break; }
+    }
+  }
+  if (!arr || arr.length === 0) return null;
+  const first = arr[0];
+  if (!first || typeof first !== 'object' || Array.isArray(first)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(first)) {
+    if (v !== null && typeof v !== 'object') out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function abortedResult(routeKey, attempt, error, method, path, ms = 0) {
   return {
     status: null,
@@ -209,6 +231,8 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
       traceId: traceContext ? traceContext.traceId : null,
       otel,
       assertionFailures,
+      // First list item's scalar fields — used by ID discovery to chain detail routes.
+      firstItem: (res.status >= 200 && res.status < 300) ? firstScalarItem(body) : null,
       // Verifiable evidence: the request issued and a bounded snapshot of what the
       // server actually returned, so a consumer never has to trust the label blind.
       evidence: {
