@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.12.0] - 2026-06-21
+
+### Added — Close the last two coverage gaps
+
+- **HAR import** for dynamic frontends. Point qa-probe at a captured `.har` file (`analyze.har.enabled` + `harFile`) and it derives the call map from real observed requests — for GraphQL/tRPC/generated-SDK/custom-service-layer frontends that static parsing misses. Feeds the same `runtimeCalls` path as CDP tracing; static AST + runtime capture together give near-complete coverage.
+- **OpenAPI spec auto-discovery + local file.** `fetchSpec` now tries common fallback paths (`/swagger.json`, `/v3/api-docs`, `/api-docs`, ...) when the configured URL 404s, and supports loading the spec from a local file via `openApiFile` — so far fewer apps fall into headless mode. (Headless already gets observed-shape drift detection via schema-history.)
+
+---
+
 ## [2.11.0] - 2026-06-21
 
 ### Added — Render the new signals in the human + AI reports

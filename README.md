@@ -533,7 +533,13 @@ module.exports = {
 
   openApiUrl: '/openapi.json',
   // Path to the OpenAPI spec relative to baseUrl.
-  // Set to null to enable headless mode (HTTP status probing only).
+  // If it isn't served there, qa-probe auto-tries common fallbacks
+  // (/swagger.json, /v3/api-docs, /api-docs, ...) before going headless.
+  // Set to null to force headless mode (HTTP status probing only).
+
+  openApiFile: null,
+  // Optional. Load the OpenAPI spec from a LOCAL file path instead of fetching it
+  // over HTTP — for backends that don't serve the spec at runtime.
 
   featureStatusUrl: '/health/features',
   // Optional. Exposes router enable/disable status for feature_flag_disabled detection.
@@ -804,6 +810,11 @@ api.get(buildUrl('cases', f))  // ✗ not detected (factory function)
 ```
 
 **Generated clients and service layers** - qa-probe detects visible HTTP calls and a few common hook patterns. If your app hides requests behind generated SDK methods, GraphQL clients, tRPC routers, Next server actions, or custom service-layer functions, add a parser adapter or expose a small wrapper that qa-probe can recognize.
+
+> **Escape hatch — HAR import.** For frontends too dynamic to parse statically, capture real traffic once (DevTools → *Save all as HAR*, or your existing Playwright/Cypress run) and point qa-probe at it. It derives the call map from observed requests, no parsing required:
+> ```js
+> analyze: { har: { enabled: true, harFile: './recording.har' } }
+> ```
 
 **POST body validation** — POST endpoints in `safePosts` are probed with an empty body. If your endpoint requires a valid body and returns 422 on empty input, expect false positives. Use Schemathesis for thorough POST contract testing.
 
