@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.10.0] - 2026-06-21
+
+### Added — Write-flow (CRUD-chain) testing (opt-in, mutating)
+
+Exercises real create → read → update → delete chains to catch write-path and logic bugs a read-only smoke probe can't. **OFF by default — it mutates data.**
+
+- New `writeFlows` config: `enabled` plus an explicit list of `flows`. Each flow defines `create` / `read` / `update` / `delete` steps; the created id is threaded into `{id}` placeholders.
+- **Safety:** nothing is auto-discovered or auto-mutated — every flow is hand-defined. Every created resource is **deleted at the end of its flow, even if an earlier step fails or throws**, and the delete is verified. A loud warning prints when the pass runs. Intended for a disposable / test-tenant environment.
+- Per-flow pass/fail + cleanup status surface in the report's `writeFlows` block.
+
+---
+
 ## [2.9.0] - 2026-06-21
 
 ### Added — ID chaining (kills unseeded-DB noise)

@@ -7,6 +7,7 @@ const { checkSSE } = require('./sse-checker');
 const { checkWS } = require('./ws-checker');
 const { runSecurityChecks } = require('./security');
 const { partitionByParams, harvestCollectionItems, applyDiscoveredIds } = require('./id-discovery');
+const { runWriteFlows } = require('./write-flows');
 const { runConcurrent } = require('./rate-limiter');
 const { createHttpClient } = require('../analyze/backend-fetcher');
 const { saveProbeResults } = require('../cache');
@@ -101,6 +102,21 @@ async function runProbe(graph, config) {
     const probeAs = (endpoint, personaHeaders) => probeEndpoint(endpoint, personaHeaders || {}, http, graph, config);
     const sec = await runSecurityChecks(httpEndpoints, results, config, probeAs);
     spinner.succeed(`Security: ${sec.authBypass} auth-bypass, ${sec.privilegeEscalation} priv-esc, ${sec.piiLeak} PII (${sec.authBypassChecked} endpoints re-probed)`);
+  }
+
+  // 4c. Write-flow CRUD chains (opt-in via config.writeFlows.enabled). This MUTATES
+  // DATA — every flow is explicitly defined and every created resource is deleted
+  // at the end of its flow. Intended for a disposable / test-tenant environment.
+  if (config.writeFlows && config.writeFlows.enabled) {
+    process.stderr.write('[qa-probe] WARNING: write-flows are ENABLED — this MUTATES data. Use a disposable / test-tenant environment only.\n');
+    spinner.start('Running write-flows...');
+    const request = async ({ method, path, body }) => {
+      const res = await http.request({ method: String(method).toLowerCase(), url: path, data: body, headers, validateStatus: () => true });
+      return { status: res.status, body: res.data };
+    };
+    const wf = await runWriteFlows(config, request);
+    results.__writeFlows = wf;
+    spinner.succeed(`Write-flows: ${wf.passed}/${wf.ran} passed, ${wf.cleanedUp} cleaned up${wf.failed ? `, ${wf.failed} FAILED` : ''}`);
   }
 
   // 5. SSE checking
