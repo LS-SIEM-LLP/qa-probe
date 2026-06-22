@@ -20,6 +20,17 @@ function writeMarkdownReport(report, config) {
   lines.push('');
   lines.push(`- Frontend route score: ${score}/100`);
   lines.push(`- Endpoint issues found: ${diagnostics.length}`);
+  const secCount = countSecurity(diagnostics);
+  if (secCount) lines.push(`- 🔒 Security findings: **${secCount}**`);
+  if (report.baselines) {
+    lines.push(`- Baselines: ${report.baselines.endpointsWithBaseline} endpoint(s) learned from ${report.baselines.runsAnalyzed} run(s), ${report.baselines.anomaliesFlagged} anomaly(ies) flagged`);
+  }
+  if (report.feedback && report.feedback.applied && report.feedback.applied.length) {
+    lines.push(`- Feedback applied: ${report.feedback.suppressed} suppressed, ${report.feedback.confirmed} confirmed`);
+  }
+  if (report.writeFlows && report.writeFlows.ran) {
+    lines.push(`- Write-flows: ${report.writeFlows.passed}/${report.writeFlows.ran} passed, ${report.writeFlows.cleanedUp} cleaned up${report.writeFlows.failed ? `, **${report.writeFlows.failed} failed**` : ''}`);
+  }
   lines.push(`- Headless mode: ${(report.meta && report.meta.headless) || false}`);
   lines.push('');
 
@@ -65,6 +76,9 @@ function writeMarkdownReport(report, config) {
     }
     lines.push('');
   }
+
+  writeFeedbackSection(lines, report.feedback);
+  writeWriteFlowsSection(lines, report.writeFlows);
 
   lines.push('## Routes');
   lines.push('');
@@ -125,10 +139,10 @@ function writeEndpointDiagnostics(lines, diagnostics) {
   lines.push('');
   lines.push('Concrete probe evidence. `no_data` means the API returned 200 OK with an empty array/object/body; configured quiet-state endpoints are treated as healthy expected-empty responses.');
   lines.push('');
-  lines.push('| Endpoint | Label | Severity | Evidence | Affected Routes |');
-  lines.push('|---|---|---|---|---|');
+  lines.push('| Endpoint | Label | Severity | Confidence | Evidence | Affected Routes |');
+  lines.push('|---|---|---|---|---|---|');
   for (const item of impactItems) {
-    lines.push(`| \`${item.endpoint}\` | \`${item.label}\` | ${item.severity} | ${escapeCell(summarizeEvidence(item))} | ${escapeCell(formatAffectedRoutes(item))} |`);
+    lines.push(`| \`${item.endpoint}\` | \`${item.label}\` | ${item.severity} | ${item.confidence || '?'} | ${escapeCell(summarizeEvidence(item))} | ${escapeCell(formatAffectedRoutes(item))} |`);
   }
   lines.push('');
 
@@ -156,6 +170,48 @@ function writeEndpointDiagnostics(lines, diagnostics) {
     lines.push('|---|---|---|');
     for (const item of unmapped) {
       lines.push(`| \`${item.endpoint}\` | \`${item.label}\` | ${escapeCell(summarizeEvidence(item))} |`);
+    }
+    lines.push('');
+  }
+}
+
+function countSecurity(diagnostics) {
+  const sec = new Set(['auth_bypass', 'privilege_escalation', 'pii_leak']);
+  return (diagnostics || []).filter(d => sec.has(d.rootCause)).length;
+}
+
+function writeFeedbackSection(lines, feedback) {
+  const applied = (feedback && feedback.applied) || [];
+  if (applied.length === 0) return;
+  lines.push('## Feedback Applied');
+  lines.push('');
+  lines.push('Human/AI verdicts reapplied this run (suppression is never silent):');
+  lines.push('');
+  lines.push('| Endpoint | Verdict | Effect | By | Was | Reason |');
+  lines.push('|---|---|---|---|---|---|');
+  for (const f of applied.slice(0, 50)) {
+    lines.push(`| \`${f.endpoint}\` | \`${f.verdict}\` | ${f.effect} | ${f.by || '?'} | \`${f.priorRootCause || ''}\` | ${escapeCell(f.reason || '')} |`);
+  }
+  lines.push('');
+}
+
+function writeWriteFlowsSection(lines, wf) {
+  if (!wf || !wf.ran) return;
+  lines.push('## Write-Flows (CRUD chains)');
+  lines.push('');
+  lines.push(`${wf.passed}/${wf.ran} passed · ${wf.cleanedUp} cleaned up${wf.failed ? ` · **${wf.failed} failed**` : ''}`);
+  lines.push('');
+  lines.push('| Flow | Result | Cleaned Up |');
+  lines.push('|---|---|---|');
+  for (const f of (wf.flows || []).slice(0, 50)) {
+    lines.push(`| \`${escapeCell(f.name)}\` | ${f.ok ? '✓ pass' : '✗ fail'} | ${f.cleanedUp ? 'yes' : 'no'} |`);
+  }
+  lines.push('');
+  if ((wf.findings || []).length) {
+    lines.push('| Flow | Step | Detail |');
+    lines.push('|---|---|---|');
+    for (const x of wf.findings.slice(0, 50)) {
+      lines.push(`| \`${escapeCell(x.flow)}\` | \`${x.step}\` | ${escapeCell(x.detail)} |`);
     }
     lines.push('');
   }
