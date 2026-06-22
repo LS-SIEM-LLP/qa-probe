@@ -3,6 +3,7 @@
   "version": "2.12.1",
   "description": "Local QA agent — maps frontend routes to backend API calls, probes every endpoint live, scores pages 0–100, explains why data is missing. Works with any FastAPI/Express/Next.js app.",
   "license": "Apache-2.0",
+  "author": "LS-SIEM LLP",
   "type": "commonjs",
   "engines": {
     "node": ">=18.0.0"
@@ -17,6 +18,8 @@
     "examples/",
     "README.md",
     "LICENSE",
+    "NOTICE",
+    "SECURITY.md",
     "CHANGELOG.md"
   ],
   "scripts": {

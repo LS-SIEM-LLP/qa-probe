@@ -832,4 +832,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add framework adapters, root-c
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Copyright © 2026 **LS-SIEM LLP** — created and maintained by the LightShield SIEM team.
+
+Licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+You are free to use, modify, and redistribute qa-probe under the Apache-2.0 terms.
+The Apache License does **not** grant rights to the "qa-probe", "LightShield", or
+"LS-SIEM" names or logos — those are trademarks of LS-SIEM LLP. To report a security
+issue, see [SECURITY.md](SECURITY.md).
