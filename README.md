@@ -595,6 +595,13 @@ module.exports = {
     pathParamValues: { id: '1' },
     // Values substituted for path parameters like {id}, {slug}.
     // Example: { id: '1', user_id: '42', slug: 'test-post' }
+    // Used as a fallback — see idDiscovery below.
+
+    idDiscovery: true,
+    // ID chaining (default on). Probes param-less collections first, harvests a
+    // REAL id from each response, and uses it for detail routes (`/cases/{id}`)
+    // instead of a guessed `1` — eliminating most sample_not_found noise on an
+    // unseeded DB. Pure read, no extra requests. Set false to disable.
 
     sse: {
       enabled: true,

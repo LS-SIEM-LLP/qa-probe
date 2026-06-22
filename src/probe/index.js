@@ -6,6 +6,7 @@ const { probeEndpoint } = require('./endpoint-runner');
 const { checkSSE } = require('./sse-checker');
 const { checkWS } = require('./ws-checker');
 const { runSecurityChecks } = require('./security');
+const { partitionByParams, harvestCollectionItems, applyDiscoveredIds } = require('./id-discovery');
 const { runConcurrent } = require('./rate-limiter');
 const { createHttpClient } = require('../analyze/backend-fetcher');
 const { saveProbeResults } = require('../cache');
@@ -64,18 +65,33 @@ async function runProbe(graph, config) {
     return result;
   };
 
+  const concurrency = { concurrency: config.probe.concurrency || 5, delayMs: config.probe.delayMs || 50 };
+
+  // ID chaining (on by default; disable with probe.idDiscovery: false): probe
+  // param-less collections first, harvest a REAL id from each, then probe detail
+  // routes (`/cases/{id}`) with it instead of a guessed `1`. Eliminates most
+  // sample_not_found noise on unseeded databases. Pure read — no extra requests.
+  const chain = !config.probe || config.probe.idDiscovery !== false;
+  const { withParams, withoutParams } = chain
+    ? partitionByParams(httpEndpoints)
+    : { withParams: [], withoutParams: httpEndpoints };
+  let chained = 0;
+
   try {
-    await runConcurrent(httpEndpoints, probeOne, {
-      concurrency: config.probe.concurrency || 5,
-      delayMs: config.probe.delayMs || 50,
-    });
+    if (chain && withParams.length) {
+      await runConcurrent(withoutParams, probeOne, concurrency);
+      chained = applyDiscoveredIds(withParams, harvestCollectionItems(results), config);
+      await runConcurrent(withParams, probeOne, concurrency);
+    } else {
+      await runConcurrent(httpEndpoints, probeOne, concurrency);
+    }
   } finally {
     if (runKiller) clearTimeout(runKiller);
   }
   if (deadlineHit) {
     spinner.warn(`HTTP probe hit the overall deadline (${maxProbeMs}ms); remaining endpoints recorded as deadline-exceeded.`);
   }
-  spinner.succeed(`HTTP: ${httpEndpoints.length} endpoints probed`);
+  spinner.succeed(`HTTP: ${httpEndpoints.length} endpoints probed${chained ? ` (${chained} detail route(s) used a discovered id)` : ''}`);
 
   // 4b. Security pass (opt-in via config.security): anonymous auth-bypass re-probe,
   // PII scan on responses, and an optional per-persona access matrix. GET-only, so
