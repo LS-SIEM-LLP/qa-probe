@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.12.1] - 2026-06-21
+
+### Fixed — config keys for new features were being stripped (features dead via config file)
+
+The config loader validates with a Zod schema that **strips unknown keys**, and the schema was missing every recently-added option. So `security`, `assertions`, `writeFlows`, `openApiFile`, `analyze.har`, and the probe/scoring/report tuning keys were silently dropped — the opt-in features only worked in unit tests, not from a real `qa-probe.config.js`. (Caught by a live run against a real app where `security: { enabled: true }` never executed.)
+
+- Added schemas for top-level `security` (auth-bypass / privilege-escalation / PII, with `personas` + `policies` + `piiAllow`), `assertions`, `writeFlows`, `openApiFile`, `feedbackFile`, `analyze.har`, `probe.{idDiscovery,hardTimeoutMs,maxProbeMs,maxResponseBytes}`, `report.baselineRuns`, and `scoring.{securityIssue,assertionFailed,preconditionGate,unknown}`.
+- Added a regression test pinning the full opt-in config surface so a feature can never again be silently stripped.
+
+---
+
 ## [2.12.0] - 2026-06-21
 
 ### Added — Close the last two coverage gaps

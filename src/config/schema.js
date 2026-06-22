@@ -59,6 +59,60 @@ const HarReplaySchema = z.object({
   anonymize: z.boolean().default(true),
 });
 
+// Top-level security checks (auth-bypass / privilege-escalation / PII). Distinct
+// from the legacy probe.security booleans.
+const SecurityChecksSchema = z.object({
+  enabled: z.boolean().default(false),
+  authBypass: z.boolean().default(true),
+  pii: z.boolean().default(true),
+  piiAllow: z.array(z.string()).default([]),
+  personas: z.array(PersonaSchema).default([]),
+  policies: z.record(z.record(z.number())).default({}),
+});
+
+// Read-only response assertions, keyed by "METHOD path".
+const AssertionRuleSchema = z.object({
+  field: z.string().optional(),
+  present: z.boolean().optional(),
+  type: z.string().optional(),
+  in: z.array(z.any()).optional(),
+  pattern: z.string().optional(),
+  gte: z.number().optional(),
+  lte: z.number().optional(),
+  gt: z.number().optional(),
+  lt: z.number().optional(),
+  nonEmpty: z.boolean().optional(),
+  minItems: z.number().optional(),
+  maxItems: z.number().optional(),
+}).passthrough();
+const AssertionsSchema = z.record(z.array(AssertionRuleSchema));
+
+// Write-flow (CRUD-chain) testing — opt-in, mutating.
+const WriteFlowStepSchema = z.object({
+  method: z.string().optional(),
+  path: z.string(),
+  body: z.any().optional(),
+}).passthrough();
+const WriteFlowSchema = z.object({
+  name: z.string().optional(),
+  idField: z.string().optional(),
+  create: WriteFlowStepSchema.optional(),
+  read: WriteFlowStepSchema.optional(),
+  update: WriteFlowStepSchema.optional(),
+  delete: WriteFlowStepSchema.optional(),
+}).passthrough();
+const WriteFlowsSchema = z.object({
+  enabled: z.boolean().default(false),
+  flows: z.array(WriteFlowSchema).default([]),
+});
+
+// HAR import as an analyze-time discovery source (distinct from probe.harReplay,
+// which only supplies request bodies).
+const HarImportSchema = z.object({
+  enabled: z.boolean().default(false),
+  harFile: z.string().optional(),
+});
+
 const SchemathesisSchema = z.object({
   enabled: z.boolean().default(false),
   command: z.string().default('schemathesis'),
@@ -102,12 +156,17 @@ const LlmRepairSchema = z.object({
 const AnalyzeSchema = z.object({
   runtime: AnalyzeRuntimeSchema.default({}),
   llmRepair: LlmRepairSchema.default({}),
+  har: HarImportSchema.default({}),
 });
 
 const ProbeSchema = z.object({
   concurrency: z.number().default(5),
   delayMs: z.number().default(50),
   timeoutMs: z.number().default(10000),
+  hardTimeoutMs: z.number().optional(),
+  maxProbeMs: z.number().optional(),
+  maxResponseBytes: z.number().optional(),
+  idDiscovery: z.boolean().default(true),
   ignoreHTTPSErrors: z.boolean().default(false),
   skipPaths: z.array(z.string()).default(['^/auth/', '^/health/', '^/openapi', '^/docs']),
   expectedEmptyPaths: z.array(z.string()).default([]),
@@ -135,6 +194,10 @@ const ScoringSchema = z.object({
   disabledFeature: z.number().default(-15),
   schemaMismatch: z.number().default(-25),
   streamDead: z.number().default(-35),
+  securityIssue: z.number().default(-50),
+  assertionFailed: z.number().default(-30),
+  preconditionGate: z.number().default(-30),
+  unknown: z.number().default(-10),
 });
 
 const OutputSchema = z.object({
@@ -150,6 +213,7 @@ const ReportCoverageSchema = z.object({
 
 const ReportSchema = z.object({
   coverage: ReportCoverageSchema.default({}),
+  baselineRuns: z.number().default(20),
 });
 
 const ConfigSchema = z.object({
@@ -158,6 +222,7 @@ const ConfigSchema = z.object({
   frontendApiPrefix: z.union([z.string(), z.array(z.string())]).default('/api'),
   framework: z.enum(['fastapi', 'express', 'nextjs', 'generic', 'graphql', 'trpc']).default('fastapi'),
   openApiUrl: z.string().default('/openapi.json'),
+  openApiFile: z.string().nullable().default(null),
   featureStatusUrl: z.string().nullable().default('/health/features'),
   graphql: GraphqlSchema.default({}),
   trpc: TrpcSchema.default({}),
@@ -182,6 +247,18 @@ const ConfigSchema = z.object({
 
   // Report add-ons
   report: ReportSchema.default({}),
+
+  // Security checks (auth-bypass / privilege-escalation / PII) — opt-in.
+  security: SecurityChecksSchema.default({}),
+
+  // Read-only response assertions, keyed by "METHOD path".
+  assertions: AssertionsSchema.optional(),
+
+  // Write-flow (CRUD-chain) testing — opt-in, mutating.
+  writeFlows: WriteFlowsSchema.default({}),
+
+  // Optional: relocate the feedback store (default <output.dir>/feedback.json).
+  feedbackFile: z.string().optional(),
 
   // Optional: shell command to seed the database. Shown in empty_db fix hints.
   // Example: 'docker exec api python scripts/seed.py'
