@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.11.0] - 2026-06-21
+
+### Added — Render the new signals in the human + AI reports
+
+Everything the recent releases produced lived only in `report.json` / MCP; the markdown and ai-context reports now surface it.
+
+- **Markdown report:** a `Confidence` column on the diagnostics table; a security-findings / baselines / feedback / write-flows line in the Run Snapshot; and new **Feedback Applied** and **Write-Flows** sections.
+- **ai-context report:** baselines / feedback / write-flows / security signals, plus an explicit note that `confidence: none` / `unknown` means UNVERIFIED (not a pass).
+
+---
+
 ## [2.10.0] - 2026-06-21
 
 ### Added — Write-flow (CRUD-chain) testing (opt-in, mutating)

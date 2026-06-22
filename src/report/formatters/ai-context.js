@@ -14,6 +14,18 @@ function writeAiContext(report, graph, config) {
   lines.push(`Overall score: ${score}/100`);
   lines.push(`Headless mode: ${(report.meta && report.meta.headless) || false}`);
   lines.push(`Endpoint issues: ${diagnostics.length}`);
+  lines.push('NOTE: confidence=none / cause=unknown means qa-probe could NOT classify it — treat as UNVERIFIED, not a pass; inspect the evidence.');
+  if (report.baselines) {
+    lines.push(`Baselines: ${report.baselines.endpointsWithBaseline} learned / ${report.baselines.runsAnalyzed} runs / ${report.baselines.anomaliesFlagged} anomaly(ies)`);
+  }
+  if (report.feedback && report.feedback.applied && report.feedback.applied.length) {
+    lines.push(`Feedback applied: ${report.feedback.suppressed} suppressed, ${report.feedback.confirmed} confirmed (acknowledged endpoints are known/expected, not bugs)`);
+  }
+  if (report.writeFlows && report.writeFlows.ran) {
+    lines.push(`Write-flows: ${report.writeFlows.passed}/${report.writeFlows.ran} passed, ${report.writeFlows.failed} failed`);
+  }
+  const secCount = diagnostics.filter(d => ['auth_bypass', 'privilege_escalation', 'pii_leak'].includes(d.rootCause)).length;
+  if (secCount) lines.push(`SECURITY FINDINGS: ${secCount} (auth_bypass / privilege_escalation / pii_leak — high priority)`);
   lines.push('');
 
   const broken = Object.entries(report.routes || {})
