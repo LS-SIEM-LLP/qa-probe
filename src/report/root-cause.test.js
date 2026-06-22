@@ -69,9 +69,9 @@ describe('feature_flag_disabled', () => {
     assert.ok(result.fixHint.includes('HAS_BILLING=true'));
   });
 
-  test('404 at >=15ms with disabled flag → NOT feature_flag_disabled (falls to missing_route)', () => {
+  test('404 at >=15ms with disabled flag → feature_flag_disabled', () => {
     const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 20 }), flagGraph, cfg);
-    assert.notEqual(result.rootCause, 'feature_flag_disabled');
+    assert.equal(result.rootCause, 'feature_flag_disabled');
   });
 
   test('404 at <15ms with flag ENABLED → NOT feature_flag_disabled', () => {
@@ -164,13 +164,12 @@ describe('missing_route', () => {
     assert.equal(result.rootCause, 'missing_route');
   });
 
-  test('slow 404 (>= 15ms) for a disabled-flag path → missing_route (not feature_flag_disabled)', () => {
+  test('slow 404 for an explicitly disabled flag path → feature_flag_disabled', () => {
     const flagGraph = graph({
       featureFlags: { '/billing': { included: false, enabled: false } },
     });
-    // Slow 404 — the timing heuristic rules out flag disabled
     const result = classifyEndpoint('GET /billing/invoices', probe({ status: 404, ms: 100 }), flagGraph, cfg);
-    assert.equal(result.rootCause, 'missing_route');
+    assert.equal(result.rootCause, 'feature_flag_disabled');
   });
 });
 

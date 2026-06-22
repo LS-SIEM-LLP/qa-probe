@@ -7,6 +7,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- Fixed the `npm test` command so it runs the full `src/**/*.test.js` suite
+  instead of only the top-level `src` directory.
+- Expanded GitHub Actions coverage to Node 18/20/22 across Linux, Windows, and
+  macOS, and added an `npm pack --dry-run` packaging check.
+- Added clearer public README guidance for first-time users, starter configs,
+  limitations, and trademark/branding expectations.
+- Hardened `fix --apply` so generated patches cannot write outside the project
+  root.
+- Updated npm dependency locks to resolve all current production audit findings.
+
+---
+
 ## [2.12.1] - 2026-06-21
 
 ### Fixed — config keys for new features were being stripped (features dead via config file)

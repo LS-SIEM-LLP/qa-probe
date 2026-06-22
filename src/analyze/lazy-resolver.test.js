@@ -44,3 +44,28 @@ test('React.lazy routes associate API calls inside lazy component files', () => 
     ['GET /dashboard'],
   );
 });
+
+test('buildGraph preserves backend-only feature flags', () => {
+  const graph = buildGraph({
+    frontendRoutes: new Map(),
+    apiCalls: { byFile: new Map(), allCalls: [] },
+    backendSpec: {
+      routes: { 'GET /scim/v2/Users': { responseSchema: null } },
+      featureFlags: {
+        '/scim/v2': {
+          included: false,
+          enabled: false,
+          message: 'SCIM is disabled',
+        },
+      },
+      headless: false,
+    },
+    config: { frontendSrc: '.', frontendApiPrefix: '/api', baseUrl: 'http://localhost' },
+  });
+
+  assert.deepEqual(graph.featureFlags['/scim/v2'], {
+    included: false,
+    enabled: false,
+    message: 'SCIM is disabled',
+  });
+});

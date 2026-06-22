@@ -34,9 +34,14 @@ function renderFixes(fixes, { includeSuggestions = true } = {}) {
 
 function applyFixes(fixes, cwd = process.cwd()) {
   const applied = [];
+  const root = path.resolve(cwd);
   for (const fix of fixes) {
     if ((fix.confidence || 0) < 0.8 || !fix.patch) continue;
-    const filePath = path.resolve(cwd, fix.patch.file);
+    const filePath = path.resolve(root, fix.patch.file);
+    if (!isInsideRoot(filePath, root)) {
+      applied.push({ ...fix, applied: false, reason: 'outside_cwd' });
+      continue;
+    }
     const current = fs.readFileSync(filePath, 'utf8');
     if (!current.includes(fix.patch.before)) {
       applied.push({ ...fix, applied: false, reason: 'pattern_not_found' });
@@ -46,6 +51,11 @@ function applyFixes(fixes, cwd = process.cwd()) {
     applied.push({ ...fix, applied: true });
   }
   return applied;
+}
+
+function isInsideRoot(filePath, root) {
+  const relative = path.relative(root, filePath);
+  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 module.exports = { buildRemediations, renderFixes, applyFixes };

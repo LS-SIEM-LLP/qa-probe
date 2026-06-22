@@ -172,6 +172,30 @@ The classifier lives in `src/report/root-cause.js`. Rules run in priority order 
 
 ---
 
+## Developer Certificate of Origin (DCO)
+
+To keep the project's IP clean, every contribution must be signed off under the
+[Developer Certificate of Origin](https://developercertificate.org/). This is a
+lightweight statement that you wrote the contribution (or otherwise have the
+right to submit it under the project's license).
+
+Add a `Signed-off-by` line to each commit by committing with `-s`:
+
+```bash
+git commit -s -m "fix: ..."
+```
+
+This appends, using your real name and email:
+
+```
+Signed-off-by: Jane Doe <jane@example.com>
+```
+
+Pull requests whose commits are not signed off will be asked to amend them
+(`git commit --amend -s`, or `git rebase --signoff` for multiple commits).
+
 ## License
 
-By contributing, you agree that your contributions will be licensed under the Apache 2.0 License that covers this project.
+By contributing, you agree that your contributions will be licensed under the
+Apache License, Version 2.0 that covers this project, and that LS-SIEM LLP may
+distribute them as part of qa-probe. You retain the copyright to your contributions.

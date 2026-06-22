@@ -19,6 +19,7 @@
 
 ## Checklist
 
+- [ ] My commits are signed off (DCO): `git commit -s` — see [CONTRIBUTING.md](../CONTRIBUTING.md)
 - [ ] No hardcoded project names, credentials, or internal paths in the code
 - [ ] If adding a root-cause rule: tests cover the new rule and its priority vs existing rules
 - [ ] If adding a framework adapter: added to `src/analyze/adapters/` and wired in `backend-fetcher.js`
