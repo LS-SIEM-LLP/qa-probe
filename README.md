@@ -25,6 +25,25 @@ qa-probe is a Node.js CLI that maps common React frontend API calls to backend r
 
 ---
 
+## Start here
+
+Use qa-probe when a frontend route renders but the data is missing, stale, empty,
+or coming from the wrong backend contract. It is a local smoke QA tool: it reads
+your frontend source, optionally reads your OpenAPI spec, probes safe endpoints,
+and writes a report that explains the most likely root cause.
+
+The fastest path:
+
+1. Start your app locally or in a disposable staging/test environment.
+2. Add `qa-probe.config.js` with `baseUrl`, `frontendSrc`, `routerFile`, and auth.
+3. Run `npx qa-probe run --fail-under 80`.
+4. Open `.qaprobe/report.md`, or wire the MCP server into Claude, Cursor, or Codex.
+
+Start with read-only probing. Keep `writeFlows.enabled` off until you have a
+throwaway test tenant and explicit cleanup paths.
+
+---
+
 ## The problem it solves
 
 Your dashboard loads. No crash. But every table is empty, every chart shows zero, and you have no idea why.
@@ -65,6 +84,18 @@ For a quick public demo outline, see [`examples/demo-fixture`](examples/demo-fix
 
 ---
 
+## Example configs
+
+Two starter configs ship in this repo:
+
+- [`examples/fastapi-react/qa-probe.config.js`](examples/fastapi-react/qa-probe.config.js) for a React frontend backed by FastAPI and `/openapi.json`.
+- [`examples/express-app/qa-probe.config.js`](examples/express-app/qa-probe.config.js) for a React frontend backed by Express with a Swagger/OpenAPI endpoint.
+
+Copy the closest one to your project root as `qa-probe.config.js`, then adjust
+paths and auth environment variable names. Do not commit real credentials.
+
+---
+
 ## Manual setup (5 min)
 
 ### Step 1 — Install
@@ -100,7 +131,7 @@ module.exports = {
 };
 ```
 
-> **Tip:** `qa-probe.config.js` is gitignored automatically. Never hardcode credentials — always use environment variables.
+> **Tip:** keep `qa-probe.config.js` in `.gitignore` when it contains local auth settings. Never hardcode credentials; always use environment variables.
 
 ### Step 3 — Start your app, then run qa-probe
 
@@ -829,9 +860,32 @@ api.get(buildUrl('cases', f))  // ✗ not detected (factory function)
 
 ---
 
+## What qa-probe is not
+
+qa-probe is a source-aware smoke probe and root-cause explainer. It does not
+replace Playwright or Cypress for user journeys, Schemathesis or similar tools
+for API fuzzing, dedicated accessibility scans, or load-test tools for capacity
+work.
+
+The local config file is trusted JavaScript loaded with `require()`. Do not run
+qa-probe against an untrusted repository or config file.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add framework adapters, root-cause rules, and router pattern extractors.
+
+## Branding and trademarks
+
+The package name is `qa-probe`. The project is maintained by LS-SIEM LLP, the
+LightShield SIEM team. Apache-2.0 grants rights to use, copy, modify, and
+redistribute the code; it does not grant trademark rights to the `qa-probe`,
+`LightShield`, or `LS-SIEM` names or logos.
+
+Forks and integrations may describe compatibility with qa-probe, but should not
+present themselves as an official LS-SIEM LLP or LightShield release unless
+separately authorized.
 
 ## License
 

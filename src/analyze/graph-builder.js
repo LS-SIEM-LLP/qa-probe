@@ -78,7 +78,7 @@ function buildGraph({ frontendRoutes, apiCalls, runtimeCalls = null, runtimeDomS
   }
 
   // --- 5. Identify feature-flag-disabled routes ---
-  const featureFlagMap = {};
+  const featureFlagMap = { ...(featureFlags || {}) };
   for (const [routePath] of Object.entries(frontendRoutesOut)) {
     const flag = findFeatureFlag(routePath, featureFlags);
     if (flag) {

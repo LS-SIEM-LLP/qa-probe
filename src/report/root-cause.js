@@ -24,8 +24,6 @@
  * 16. ok                     — everything else
  */
 
-const DISABLED_FEATURE_MAX_MS = 15; // 404 at <15ms → flag disabled
-
 function classifyEndpoint(endpointKey, probeResult, graph, config) {
   if (!probeResult) return { rootCause: 'not_probed', rootCauseDetail: null, fixHint: null };
 
@@ -110,13 +108,14 @@ function classifyEndpoint(endpointKey, probeResult, graph, config) {
   }
 
   // --- Rule 1: feature_flag_disabled ---
-  if (status === 404 && ms < DISABLED_FEATURE_MAX_MS) {
+  if (status === 404) {
     const flagInfo = findFeatureFlag(endpointKey, graph);
     if (flagInfo && (!flagInfo.included || !flagInfo.enabled)) {
       const flagName = getFlagName(endpointKey, graph);
+      const timingDetail = typeof ms === 'number' ? ` at ${ms}ms` : '';
       return {
         rootCause: 'feature_flag_disabled',
-        rootCauseDetail: `${endpointKey} → 404 at ${ms}ms. Router not registered: ${flagInfo.message || 'feature flag disabled'}`,
+        rootCauseDetail: `${endpointKey} → 404${timingDetail}. Feature disabled: ${flagInfo.message || 'feature flag disabled'}`,
         fixHint: flagName
           ? `Set ${flagName}=true in backend config (.env.prod or environment variables) and restart the API.`
           : 'Enable the corresponding HAS_* flag in backend config and restart the API.',
