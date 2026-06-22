@@ -1,9 +1,49 @@
 'use strict';
 
+const fs = require('fs');
+
+// Common locations to look for an OpenAPI/Swagger spec if the configured URL
+// (or default) isn't served there — so fewer apps fall into headless mode.
+const FALLBACK_SPEC_PATHS = [
+  '/openapi.json', '/swagger.json', '/v3/api-docs', '/api-docs',
+  '/swagger/v1/swagger.json', '/openapi.yaml',
+];
+
+function looksLikeSpec(data) {
+  return !!(data && typeof data === 'object' && (data.openapi || data.swagger || data.paths));
+}
+
+/**
+ * Load an OpenAPI spec from a local file (config.openApiFile) or by trying the
+ * configured URL plus a list of common fallback paths. Returns { spec, source }
+ * or throws if none yield a spec.
+ */
+async function loadSpec(config, http) {
+  if (config.openApiFile) {
+    const spec = JSON.parse(fs.readFileSync(config.openApiFile, 'utf8'));
+    return { spec, source: config.openApiFile };
+  }
+  const candidates = [];
+  if (config.openApiUrl) candidates.push(config.openApiUrl);
+  for (const p of FALLBACK_SPEC_PATHS) if (!candidates.includes(p)) candidates.push(p);
+
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const res = await http.get(url);
+      if (looksLikeSpec(res && res.data)) return { spec: res.data, source: url };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('no OpenAPI spec found at any known path');
+}
+
 /**
  * FastAPI adapter.
- * Fetches OpenAPI spec from /openapi.json and optional feature flags from /health/features.
- * Falls back to headless mode if spec is unavailable.
+ * Fetches OpenAPI spec from /openapi.json (with fallback discovery + local-file
+ * support) and optional feature flags from /health/features. Falls back to
+ * headless mode only if no spec is found anywhere.
  */
 
 function normalizeOpenApiRoutes(openapi) {
@@ -127,14 +167,18 @@ async function fetchSpec(config, http) {
   let featureFlags = {};
   let headless = false;
 
-  // Try to fetch OpenAPI spec
+  // Try to fetch OpenAPI spec — local file, configured URL, then common fallbacks.
   try {
-    const res = await http.get(config.openApiUrl || '/openapi.json');
-    openapi = res.data;
+    const { spec, source } = await loadSpec(config, http);
+    openapi = spec;
+    const configured = config.openApiFile || config.openApiUrl || '/openapi.json';
+    if (source !== configured) {
+      process.stderr.write(`[qa-probe] OpenAPI spec found at ${source} (not ${configured}).\n`);
+    }
   } catch (err) {
     headless = true;
     process.stderr.write(
-      `[qa-probe] OpenAPI spec unavailable at ${config.openApiUrl}: ${err.message}\n` +
+      `[qa-probe] No OpenAPI spec found (tried ${config.openApiFile || config.openApiUrl || '/openapi.json'} + common fallbacks): ${err.message}\n` +
       `[qa-probe] Falling back to headless mode — HTTP status probing only.\n`
     );
   }
@@ -239,4 +283,4 @@ function extractToken(loginResponse, config) {
   return {};
 }
 
-module.exports = { fetchSpec, isAuthRequired, buildAuthRequest, extractToken, normalizeOpenApiRoutes };
+module.exports = { fetchSpec, isAuthRequired, buildAuthRequest, extractToken, normalizeOpenApiRoutes, loadSpec, looksLikeSpec };

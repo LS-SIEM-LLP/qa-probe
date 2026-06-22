@@ -7,6 +7,7 @@ const { buildGraph } = require('./graph-builder');
 const { saveGraph } = require('../cache');
 const { createParseCache } = require('./parse-cache');
 const { traceRuntimeRoutes } = require('./runtime-tracer');
+const { harToRuntimeCalls } = require('./har-import');
 
 async function runAnalyze(config, opts = {}) {
   const spinner = createSpinner();
@@ -38,6 +39,26 @@ async function runAnalyze(config, opts = {}) {
     runtimeTrace = await traceRuntimeRoutes(frontendRoutes, config, { warnings });
     const runtimeCount = [...runtimeTrace.runtimeCalls.values()].reduce((sum, calls) => sum + calls.length, 0);
     spinner.succeed(`Runtime tracing: ${runtimeCount} API request(s) observed`);
+  }
+
+  // HAR import: discover endpoints from a captured .har file (for frontends too
+  // dynamic to parse statically). Feeds the same runtimeCalls path as CDP tracing.
+  const harCfg = (config.analyze && config.analyze.har) || {};
+  if (harCfg.enabled && harCfg.harFile) {
+    const harCalls = harToRuntimeCalls(harCfg.harFile, config);
+    const harCount = [...harCalls.values()].reduce((sum, calls) => sum + calls.length, 0);
+    if (harCount) {
+      if (!runtimeTrace) {
+        runtimeTrace = { runtimeCalls: harCalls, domSnapshots: null };
+      } else {
+        for (const [routePath, calls] of harCalls.entries()) {
+          runtimeTrace.runtimeCalls.set(routePath, (runtimeTrace.runtimeCalls.get(routePath) || []).concat(calls));
+        }
+      }
+      spinner.succeed(`HAR import: ${harCount} API request(s) from ${harCfg.harFile}`);
+    } else {
+      spinner.warn(`HAR import: no API requests found in ${harCfg.harFile}`);
+    }
   }
 
   // 2. Fetch backend spec (or headless)
