@@ -78,8 +78,8 @@ Features that are out of scope:
 ## Development setup
 
 ```bash
-git clone https://github.com/kinghtfall/LS-QA-Probe.git
-cd LS-QA-Probe
+git clone https://github.com/LS-SIEM-LLP/qa-probe.git
+cd qa-probe
 npm install
 
 # Run against your own project

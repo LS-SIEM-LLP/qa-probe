@@ -56,12 +56,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/kinghtfall/LS-QA-Probe"
+    "url": "git+https://github.com/LS-SIEM-LLP/qa-probe.git"
   },
   "bugs": {
-    "url": "https://github.com/kinghtfall/LS-QA-Probe/issues"
+    "url": "https://github.com/LS-SIEM-LLP/qa-probe/issues"
   },
-  "homepage": "https://github.com/kinghtfall/LS-QA-Probe#readme",
+  "homepage": "https://github.com/LS-SIEM-LLP/qa-probe#readme",
   "optionalDependencies": {
     "playwright": "^1.59.1"
   }

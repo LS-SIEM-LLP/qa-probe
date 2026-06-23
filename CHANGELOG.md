@@ -376,4 +376,4 @@ Initial public release under Apache 2.0.
 
 ---
 
-[1.0.0]: https://github.com/kinghtfall/LS-QA-Probe/releases/tag/v1.0.0
+[1.0.0]: https://github.com/LS-SIEM-LLP/qa-probe/releases/tag/v1.0.0
