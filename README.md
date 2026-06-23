@@ -1,10 +1,10 @@
 # qa-probe
 
-**Find out exactly why your pages are blank — in under 5 minutes.**
+**Find out exactly why your pages are blank - in under 5 minutes.**
 
 qa-probe is a Node.js command-line tool that reads your React frontend, maps every
 API call to its backend route, probes those endpoints live with real auth, and tells
-you the **root cause** when something is wrong — not just a status code.
+you the **root cause** when something is wrong - not just a status code.
 
 ```
 Overall score: 74/100
@@ -42,7 +42,7 @@ zero, and you have no idea why. The cause is almost always one of:
 
 qa-probe builds a source-aware map from frontend calls to live backend responses, then
 explains each failure in one line with a fix hint. It complements Playwright (user
-journeys) and Schemathesis (contract fuzzing) — it is the layer that answers
+journeys) and Schemathesis (contract fuzzing) - it is the layer that answers
 "why is this page blank?" first.
 
 ---
@@ -109,36 +109,36 @@ real auth, and write a full report to `.qaprobe/` (`report.md`, `report.json`,
 | `contract_mismatch`     | a similar route exists (slash/casing) | align the frontend path |
 | `missing_route`         | 404, not in the OpenAPI spec | fix the typo or `include_router()` |
 | `empty_db`              | 200 OK but empty array | seed the database |
-| `precondition_required` | 428 — terms/onboarding/MFA gate not satisfied | clear the gate for the probe account |
-| `auth_scope_mismatch`   | 401/403 — wrong role/scope | use a user with the required permissions |
+| `precondition_required` | 428 - terms/onboarding/MFA gate not satisfied | clear the gate for the probe account |
+| `auth_scope_mismatch`   | 401/403 - wrong role/scope | use a user with the required permissions |
 | `schema_mismatch`       | a field was renamed/removed vs the spec | align frontend, backend, and spec |
 | `auth_bypass`           | endpoint returns 200 without auth | add the missing auth guard |
 | `assertion_failed`      | response violated a declared invariant | fix the response or the assertion |
 | `server_error`          | 5xx | check backend logs |
 
 **Every result is verifiable.** Each diagnosis carries its **evidence** (the request,
-a snapshot of the response, timing) and a **confidence** level — `high`, `medium`, or
+a snapshot of the response, timing) and a **confidence** level - `high`, `medium`, or
 `none`. A `confidence: none` / `unknown` result is explicitly **not** a confirmed pass.
 
-**Score:** each route is 0–100; the overall score is the average. Use
+**Score:** each route is 0-100; the overall score is the average. Use
 `--fail-under 80` to make CI fail when the score drops.
 
 ---
 
 ## Use cases
 
-- **"Why is this page blank?"** — the everyday case. Get a root cause and a fix hint
+- **"Why is this page blank?"** - the everyday case. Get a root cause and a fix hint
   in one run instead of digging through network tabs and logs.
-- **CI gate** — `qa-probe run --fail-under 80` blocks a deploy when pages regress.
-- **Demo / staging sign-off** — confirm an environment actually works before a customer
+- **CI gate** - `qa-probe run --fail-under 80` blocks a deploy when pages regress.
+- **Demo / staging sign-off** - confirm an environment actually works before a customer
   call, not just that it returns 200s.
-- **Catch contract drift** — a backend refactor renames a field or moves a route;
+- **Catch contract drift** - a backend refactor renames a field or moves a route;
   qa-probe flags the exact endpoint and frontend call affected.
-- **Security smoke** — find endpoints missing an auth guard or leaking PII (opt-in,
+- **Security smoke** - find endpoints missing an auth guard or leaking PII (opt-in,
   read-only, see Security checks).
-- **Logic checks** — assert response invariants (valid enum values, non-negative
+- **Logic checks** - assert response invariants (valid enum values, non-negative
   counts, required fields) without writing a test suite.
-- **AI-assisted debugging** — let Claude, Cursor, or Codex query the QA state and
+- **AI-assisted debugging** - let Claude, Cursor, or Codex query the QA state and
   explain failures in plain English (see below).
 
 ---
@@ -146,7 +146,7 @@ a snapshot of the response, timing) and a **confidence** level — `high`, `medi
 ## Use it with an AI assistant (Claude Code, Cursor, Codex)
 
 qa-probe ships a **Model Context Protocol (MCP) server**. Point your AI assistant at
-it and the assistant can read your QA data and explain failures directly — no manual
+it and the assistant can read your QA data and explain failures directly - no manual
 report-reading.
 
 ### Setup
@@ -191,13 +191,13 @@ Restart the assistant. Now you can ask in plain English:
 | `qa_probe_run_analysis`   | "Run a full QA check and give me the summary" |
 | `qa_probe_label`          | "Mark this finding as expected / a real bug" |
 
-MCP output is sanitized — SQL errors, stack traces, and table names are redacted
+MCP output is sanitized - SQL errors, stack traces, and table names are redacted
 before they reach the assistant. Raw data stays on disk. Results carry their
 evidence and confidence, and `explain_failure` returns a plain-English `trust` note
 when a finding is unverified, so the assistant does not report guesses as passes.
 
 You can also simply open the `qa-probe` folder (or your project with `.qaprobe/`) in
-an AI coding tool and ask it to read `ai-context.md` — a compact, LLM-oriented summary
+an AI coding tool and ask it to read `ai-context.md` - a compact, LLM-oriented summary
 written on every run.
 
 ---
@@ -220,28 +220,28 @@ qa-probe mcp       [--config <path>]                       start the MCP server 
 
 ## Capabilities
 
-- **Source-aware mapping** — Babel parses your frontend; detects axios/fetch calls and
+- **Source-aware mapping** - Babel parses your frontend; detects axios/fetch calls and
   common hook patterns; extracts routes from React Router (JSX and `createBrowserRouter`)
   and TanStack Router.
-- **Live probing with real auth** — bearer, cookie, api-key, or none. Concurrency-limited,
+- **Live probing with real auth** - bearer, cookie, api-key, or none. Concurrency-limited,
   with a hard per-request deadline so a streaming endpoint can never hang the run.
-- **Root-cause classification** — around 25 causes, each with a fix hint.
-- **ID chaining** — probes collections first, harvests a real id, then probes detail
+- **Root-cause classification** - around 25 causes, each with a fix hint.
+- **ID chaining** - probes collections first, harvests a real id, then probes detail
   routes with it instead of a guessed value (kills unseeded-DB noise). On by default.
-- **Adaptive baselines** — learns each endpoint's normal latency and row counts from
+- **Adaptive baselines** - learns each endpoint's normal latency and row counts from
   recent runs and flags deviation from itself. No model; fully inspectable.
-- **Feedback** — `qa-probe label` (or the MCP tool) records a verdict that is reapplied
+- **Feedback** - `qa-probe label` (or the MCP tool) records a verdict that is reapplied
   on future runs. Scoped labels auto-revoke if behavior changes, so they cannot hide a
   regression.
-- **Security checks (opt-in)** — anonymous auth-bypass re-probe, PII scan, and a
+- **Security checks (opt-in)** - anonymous auth-bypass re-probe, PII scan, and a
   per-persona privilege-escalation matrix. GET-only; never issues a write.
-- **Response assertions** — declare invariants (`in`, `type`, `gte`, `pattern`,
+- **Response assertions** - declare invariants (`in`, `type`, `gte`, `pattern`,
   `present`, `minItems`, ...) and qa-probe verifies them on every 2xx response.
-- **Write-flows (opt-in, mutating)** — full create/read/update/delete chains with
+- **Write-flows (opt-in, mutating)** - full create/read/update/delete chains with
   guaranteed cleanup. Off by default; for a disposable / test-tenant environment only.
 - **SSE and WebSocket checks**, schema-drift detection, blast radius, regression diff,
   coverage, and HAR import for dynamic frontends.
-- **OpenAPI auto-discovery** — tries common spec paths and supports a local spec file,
+- **OpenAPI auto-discovery** - tries common spec paths and supports a local spec file,
   so fewer apps fall back to headless mode.
 
 ---
@@ -285,7 +285,7 @@ module.exports = {
 ```
 
 `qa-probe.config.js` is executed as JavaScript (like ESLint or Jest configs). Never
-hardcode credentials — use environment variables.
+hardcode credentials - use environment variables.
 
 ---
 
@@ -293,12 +293,12 @@ hardcode credentials — use environment variables.
 
 Three phases, each cached so you can re-run them independently.
 
-1. **Analyze** — parse the frontend AST, extract routes, fetch the OpenAPI spec (or
+1. **Analyze** - parse the frontend AST, extract routes, fetch the OpenAPI spec (or
    import a HAR), and build a dependency graph with blast radius.
-2. **Probe** — authenticate once, then probe every discovered endpoint live: HTTP,
+2. **Probe** - authenticate once, then probe every discovered endpoint live: HTTP,
    SSE, WebSocket, with hard deadlines and ID chaining.
-3. **Report** — classify root causes, apply baselines and feedback, score routes
-   0–100, and write JSON / Markdown / ai-context / HTML reports.
+3. **Report** - classify root causes, apply baselines and feedback, score routes
+   0-100, and write JSON / Markdown / ai-context / HTML reports.
 
 ---
 
@@ -322,7 +322,7 @@ qa-probe maps and explains; reach for the others to go deeper on what it surface
 ## Security and safe use
 
 - Credentials are held in memory for the run and never written to any report.
-- Config is executed as JavaScript — only run qa-probe with a config you trust.
+- Config is executed as JavaScript - only run qa-probe with a config you trust.
 - `ignoreHTTPSErrors: true` disables TLS verification; dev/staging only.
 - Security re-probing is GET-only and never writes. Write-flows are off by default
   and clean up after themselves; use them only against a disposable environment.
@@ -334,7 +334,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 ## Known limitations
 
 - Detects visible HTTP calls and common hook patterns. Generated SDK clients, GraphQL
-  clients, tRPC routers, and custom service layers may need an adapter — or use HAR
+  clients, tRPC routers, and custom service layers may need an adapter - or use HAR
   import to discover them from real traffic.
 - Dynamic URLs built by arbitrary factory functions are not detected.
 - Best results need an OpenAPI spec; headless mode loses the spec-dependent rules but
@@ -359,8 +359,8 @@ License does not grant permission to use these names or logos.
 
 ## License
 
-Copyright (c) 2026 LS-SIEM LLP — created and maintained by the LightShield SIEM team.
+Copyright (c) 2026 LS-SIEM LLP - created and maintained by the LightShield SIEM team.
 
-Licensed under the Apache License, Version 2.0 — see [LICENSE](LICENSE) and
+Licensed under the Apache License, Version 2.0 - see [LICENSE](LICENSE) and
 [NOTICE](NOTICE). You may use, modify, and redistribute qa-probe under the Apache-2.0
 terms; copyright and the trademarks above remain with LS-SIEM LLP.
