@@ -36,12 +36,13 @@ jobs:
         run: npm pack --dry-run
 
       - name: Verify all modules load
-        run: node -e "
-          require('./src/analyze/route-extractor');
-          require('./src/analyze/graph-builder');
-          require('./src/config/schema');
-          require('./src/probe/endpoint-runner');
-          require('./src/mcp/sanitize');
-          require('./src/report/root-cause');
-          console.log('all modules load OK');
-        "
+        run: |
+          node -e "
+            require('./src/analyze/route-extractor');
+            require('./src/analyze/graph-builder');
+            require('./src/config/schema');
+            require('./src/probe/endpoint-runner');
+            require('./src/mcp/sanitize');
+            require('./src/report/root-cause');
+            console.log('all modules load OK');
+          "
