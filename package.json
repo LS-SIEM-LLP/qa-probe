@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "start": "node bin/qa-probe.js",
-    "test": "node --test \"src/**/*.test.js\""
+    "test": "node --test"
   },
   "dependencies": {
     "@babel/parser": "^7.24.0",
