@@ -9,6 +9,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [2.13.0] - 2026-11-09
+
+### Added
+
+- `qa-probe doctor`: checks the Node version, config validity, credentials (presence
+  only, never printed), output folder, backend reachability and OpenAPI spec.
+- MCP setup-error mode: when the config is missing or invalid, `qa-probe mcp` now stays up
+  and explains the problem through a `setup_status` tool. Before, it exited and MCP clients
+  showed only "connection closed".
+
+### Fixed
+
+- The MCP server reported a hard-coded version `1.0.0`; it now reports the package version.
+
 ### Changed
 
 - Fixed the `npm test` command so it runs the full `src/**/*.test.js` suite

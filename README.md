@@ -212,7 +212,14 @@ qa-probe report    [--config <path>] [--fail-under <N>]   score, classify, write
 qa-probe label <endpoint> <verdict> [-r <reason>]          record feedback (reapplied later)
 qa-probe fix       [--config <path>] [--apply] [--pr]      generate remediation diffs
 qa-probe mcp       [--config <path>]                       start the MCP server (stdio)
+qa-probe doctor    [--config <path>]                       check setup before you run anything
 ```
+
+`qa-probe doctor` checks the Node version, that the config loads, that credentials are
+present (it never prints them), that the output folder is writable, and that the backend and
+OpenAPI spec answer. If the MCP server cannot start because of a bad or incomplete config, it
+now stays up and reports the reason through its `setup_status` tool, so an MCP client shows the
+real problem instead of only "connection closed".
 
 `--fail-under <N>` exits non-zero when the overall score is below N (a CI gate).
 

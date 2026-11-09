@@ -75,4 +75,12 @@ program
     require('./commands/run')(opts);
   });
 
+program
+  .command('doctor')
+  .description('Check setup: Node version, config, credentials, output folder, backend and OpenAPI reachability')
+  .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
+  .action((opts) => {
+    require('./commands/doctor')(opts);
+  });
+
 program.parse(process.argv);
