@@ -25,3 +25,6 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Example configs ship with the repo
+!examples/**/qa-probe.config.js

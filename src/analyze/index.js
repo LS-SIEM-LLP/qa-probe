@@ -1,5 +1,7 @@
 'use strict';
 
+const { discoverFileRoutes } = require('./file-routes');
+
 const { parseFrontendSrc } = require('./frontend-parser');
 const { extractRoutes } = require('./route-extractor');
 const { createHttpClient, getAdapter } = require('./backend-fetcher');
@@ -26,12 +28,35 @@ async function runAnalyze(config, opts = {}) {
     parseCache,
     warnings,
   });
+  // File-based routers (for example TanStack Router) have no <Route> tree to read.
+  let fileRouteCount = 0;
+  try {
+    for (const [routePath, info] of discoverFileRoutes(config.frontendSrc)) {
+      if (!frontendRoutes.has(routePath)) {
+        frontendRoutes.set(routePath, { component: info.component, authGuard: info.authGuard, requiredScopes: info.requiredScopes });
+        fileRouteCount++;
+      }
+    }
+  } catch (err) {
+    warnings.push({ message: `File-route discovery skipped: ${err.message}` });
+  }
   parseCache.save();
   const discoveredClients = (apiCalls.clientNames || []).filter(
     n => !['api', 'apiClient', 'axios', 'client', 'http', 'axiosInstance', 'instance', 'httpClient', 'request', 'fetcher', 'apiV1', 'apiV2'].includes(n)
   );
   const clientNote = discoveredClients.length > 0 ? ` (auto-detected clients: ${discoveredClients.join(', ')})` : '';
   spinner.succeed(`Frontend: ${frontendRoutes.size} routes, ${apiCalls.allCalls.length} API calls found${clientNote}`);
+  const sdkCallCount = apiCalls.allCalls.filter((c) => c.source === 'sdk').length;
+  if (sdkCallCount) spinner.succeed(`  ${sdkCallCount} call(s) came from a generated API client`);
+  if (fileRouteCount) spinner.succeed(`  ${fileRouteCount} route(s) came from file-based routing`);
+  if (frontendRoutes.size === 0 || apiCalls.allCalls.length === 0) {
+    spinner.warn(
+      `Discovery found ${frontendRoutes.size} route(s) and ${apiCalls.allCalls.length} API call(s). ` +
+      'That usually means qa-probe cannot read how this app is wired, not that nothing is wrong. ' +
+      'Check frontendSrc and routerFile in your config, or record real traffic and import it ' +
+      '(analyze.har), which works with any stack. Results below are not a clean bill of health.'
+    );
+  }
 
   let runtimeTrace = null;
   if (config.analyze && config.analyze.runtime && config.analyze.runtime.enabled) {

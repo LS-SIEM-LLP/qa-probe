@@ -37,7 +37,7 @@ function buildGraph({ frontendRoutes, apiCalls, runtimeCalls = null, runtimeDomS
   for (const [routePath, { component, authGuard, requiredScopes, apiCallsList }] of Object.entries(routeApiCallMap)) {
     for (const call of apiCallsList) {
       const backendPath = stripFrontendPrefix(call.path, prefix);
-      const matchKey = matchBackendRoute(`${call.method} ${backendPath}`, backendRoutes);
+      const matchKey = matchCallToBackend(call, backendPath, backendRoutes);
 
       if (matchKey) {
         if (!blastRadius[matchKey]) {
@@ -56,7 +56,7 @@ function buildGraph({ frontendRoutes, apiCalls, runtimeCalls = null, runtimeDomS
   for (const [routePath, data] of Object.entries(routeApiCallMap)) {
     const apiCallsAnnotated = data.apiCallsList.map(call => {
       const backendPath = stripFrontendPrefix(call.path, prefix);
-      const matchKey = matchBackendRoute(`${call.method} ${backendPath}`, backendRoutes);
+      const matchKey = matchCallToBackend(call, backendPath, backendRoutes);
       return {
         method: call.method,
         path: call.path,
@@ -250,6 +250,20 @@ function findRouteForFile(relFile, frontendRoutes, componentToRoute) {
  * Find the backend route key that matches a given "METHOD /path" string.
  * Handles path params: /items/{id} matches /items/1 etc.
  */
+/**
+ * Match a frontend call to a backend route. The configured API prefix is normally stripped
+ * (the proxy adds it), but some backends serve the full path themselves (for example
+ * /api/v1/items), so the unstripped path is tried too.
+ */
+function matchCallToBackend(call, strippedPath, backendRoutes) {
+  const stripped = matchBackendRoute(`${call.method} ${strippedPath}`, backendRoutes);
+  if (stripped) return stripped;
+  if (call.path && call.path !== strippedPath) {
+    return matchBackendRoute(`${call.method} ${call.path}`, backendRoutes);
+  }
+  return null;
+}
+
 function matchBackendRoute(callKey, backendRoutes) {
   // Exact match first
   if (backendRoutes[callKey]) return callKey;

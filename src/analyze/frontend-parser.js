@@ -1,5 +1,7 @@
 'use strict';
 
+const { discoverSdk, findSdkCalls } = require('./sdk-calls');
+
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('@babel/parser');
@@ -310,6 +312,21 @@ function parseFrontendSrc(srcDir, options = {}) {
       byFile.set(file, calls);
       allCalls.push(...calls);
     }
+  }
+
+  // Generated SDK clients (hey-api / openapi-typescript-codegen): count `Service.method(` uses
+  // as calls to the URL the generated function requests.
+  try {
+    const relBase = path.resolve(srcDir, '..', '..');
+    const sdkCalls = findSdkCalls(srcDir, discoverSdk(srcDir), relBase);
+    for (const call of sdkCalls) {
+      const list = byFile.get(call.file) || [];
+      list.push(call);
+      byFile.set(call.file, list);
+      allCalls.push(call);
+    }
+  } catch (err) {
+    warnings.push({ message: `SDK call discovery skipped: ${err.message}` });
   }
 
   return { byFile, allCalls, clientNames: [...clientNames], warnings };

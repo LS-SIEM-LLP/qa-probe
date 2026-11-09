@@ -76,6 +76,18 @@ program
   });
 
 program
+  .command('verify')
+  .description('After a change, live-probe the endpoints the changed files affect and report pass, fail or inconclusive with evidence')
+  .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
+  .option('--files <list>', 'comma-separated changed files (default: files changed in git)')
+  .option('--git [ref]', 'use files changed against a git ref (default HEAD)')
+  .option('--all', 'probe every known endpoint, not only the affected ones')
+  .option('--json', 'print the result as JSON')
+  .action((opts) => {
+    require('./commands/verify')(opts);
+  });
+
+program
   .command('doctor')
   .description('Check setup: Node version, config, credentials, output folder, backend and OpenAPI reachability')
   .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')

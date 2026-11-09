@@ -15,6 +15,8 @@ const tools = [
   require('./tools/blast-radius'),
   require('./tools/run-analysis'),
   require('./tools/label'),
+  require('./tools/verify-change'),
+  require('./tools/get-claims'),
 ];
 
 async function startMcpServer(config) {

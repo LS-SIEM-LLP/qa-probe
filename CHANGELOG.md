@@ -11,6 +11,42 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.14.0] - 2026-11-09
+
+### Added
+
+- `qa-probe verify` and the MCP tool `qa_probe_verify_change`: after a change, map the changed
+  files to the pages and endpoints they affect, live-probe those endpoints, and return pass,
+  fail or inconclusive with evidence and a list of what was not checked. Frontend files are
+  mapped by API call sites and page components; server files by the routes they declare
+  (FastAPI and Express). Writes are never exercised. 200-with-no-data, 401/403 for the test
+  account and long-lived streams are reported as not verified, never as failures.
+- `qa_probe_get_claims`: what each page claims to depend on, with an evidence level
+  (`runtime-observed` or `static-only`) and the latest live status.
+- `examples/demo-app`: a runnable, dependency-free demo backend and frontend source, with a
+  `DEMO_BREAK=1` switch to show `verify` catching a broken endpoint.
+- Generated API clients: calls like `ItemsService.readItems(...)` (hey-api and
+  openapi-typescript-codegen styles) are now counted as calls to the URL the generated function
+  requests. Before, projects built on these clients showed 0 API calls.
+- File-based routing: TanStack Router `createFileRoute(...)` pages are now discovered.
+
+### Fixed
+
+- A frontend call is matched to the backend both with and without the configured API prefix
+  stripped, so backends that serve the full path (for example `/api/v1/items`) match.
+- When discovery finds 0 routes or 0 API calls, `analyze` now says so plainly and points to
+  the HAR-import route, instead of reporting a quiet success.
+
+### Tested on
+
+- LightShield SIEM (FastAPI + React): 90 routes, 739 API calls, 1135 backend routes, unchanged by
+  this release; 652 endpoints probed read-only.
+- `fastapi/full-stack-fastapi-template` (generated SDK + TanStack Router), static analysis only:
+  from 0 routes and 0 calls to 9 routes and 17 calls. 8 of the 17 calls are attributed to a page; the
+  rest come from shared components and are listed as unattributed.
+
+---
+
 ## [2.13.0] - 2026-11-09
 
 ### Added

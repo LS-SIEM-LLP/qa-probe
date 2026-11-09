@@ -190,6 +190,8 @@ Restart the assistant. Now you can ask in plain English:
 | `qa_probe_suggest_fix`    | "What should I do about feature_flag_disabled?" |
 | `qa_probe_run_analysis`   | "Run a full QA check and give me the summary" |
 | `qa_probe_label`          | "Mark this finding as expected / a real bug" |
+| `qa_probe_verify_change`  | "I changed Alerts.tsx, does the app still work?" |
+| `qa_probe_get_claims`     | "What does /alerts depend on, and how do we know?" |
 
 MCP output is sanitized - SQL errors, stack traces, and table names are redacted
 before they reach the assistant. Raw data stays on disk. Results carry their
@@ -307,6 +309,49 @@ Three phases, each cached so you can re-run them independently.
 3. **Report** - classify root causes, apply baselines and feedback, score routes
    0-100, and write JSON / Markdown / ai-context / HTML reports.
 
+### Check your own change (verify)
+
+After an AI assistant, or you, edits code, `qa-probe verify` answers one question with
+evidence: **does the running system still work?**
+
+```bash
+qa-probe verify                                  # files changed in git
+qa-probe verify --files frontend/src/components/Alerts.tsx,backend/app/routers/alerts.py
+qa-probe verify --all                            # every known endpoint
+```
+
+It maps each changed file to the pages and endpoints it affects (an API call in a frontend
+file, a page component, or routes declared in a FastAPI or Express file), live-probes
+those endpoints, and returns:
+
+- **pass**: at least one affected endpoint was verified healthy and none is broken.
+- **fail**: something it probed live is broken. This is the only result that exits non-zero.
+- **inconclusive**: nothing affected could be verified. It never reports a pass it has not earned.
+
+It is honest about what it could not check: write endpoints are never exercised (it does not
+change your data), an endpoint that returns 200 with no data is "not verified" (working and
+empty look the same), and a 403 for the test account or a long-lived stream is "not verified",
+not a failure. Files that map to nothing are listed, not guessed at.
+
+The MCP tool `qa_probe_verify_change` does the same for an AI assistant, and
+`qa_probe_get_claims` lists what each page depends on and how strong the evidence is:
+`runtime-observed` (seen in real traffic) versus `static-only` (found in source, never seen
+running), with the latest live status. Pair it with a code-intelligence tool: that tells you
+what a change could affect, this checks that the running system still works.
+
+### Try it in two minutes
+
+A tiny runnable demo lives in `examples/demo-app`:
+
+```bash
+cd examples/demo-app
+node server.js &              # demo backend, no dependencies
+npx qa-probe doctor
+npx qa-probe run
+DEMO_BREAK=1 node server.js   # restart it broken, then:
+npx qa-probe verify --files frontend/src/components/Alerts.tsx   # FAIL, with the evidence
+```
+
 ---
 
 ## vs other tools
@@ -340,10 +385,21 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Known limitations
 
-- Detects visible HTTP calls and common hook patterns. Generated SDK clients, GraphQL
-  clients, tRPC routers, and custom service layers may need an adapter - or use HAR
-  import to discover them from real traffic.
+- Detects visible HTTP calls, common hook patterns and generated SDK clients (hey-api and
+  openapi-typescript-codegen styles). GraphQL clients, tRPC routers and custom service layers
+  may need an adapter - or use HAR import to discover them from real traffic.
+- Pages are found from a `<Route>` tree or from TanStack Router file routes. Other file-based
+  routers (for example Next.js) are not read yet.
+- Calls made in shared components are attributed to a page by file and component name; the rest
+  are listed as unattributed rather than guessed.
+- If discovery finds 0 routes or 0 API calls, `analyze` warns that the result is not a clean
+  bill of health. Record real traffic and import it (`analyze.har`) for any stack.
 - Dynamic URLs built by arbitrary factory functions are not detected.
+- `verify` maps backend files by the routes they declare (FastAPI decorators, Express
+  `router.get(...)`). Routes registered another way, or business logic in files that
+  declare no routes, will show as "not mapped" rather than being guessed at.
+- It checks that endpoints respond healthily. It does not check that a page renders them
+  correctly; use a browser tool such as Playwright for that.
 - Best results need an OpenAPI spec; headless mode loses the spec-dependent rules but
   still detects observed-shape drift.
 
