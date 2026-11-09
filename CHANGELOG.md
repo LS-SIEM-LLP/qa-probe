@@ -30,6 +30,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   requests. Before, projects built on these clients showed 0 API calls.
 - File-based routing: TanStack Router `createFileRoute(...)` pages are now discovered.
 
+- Claude desktop extension: `npm run build:mcpb` builds `dist-mcpb/qa-probe-<version>.mcpb` with no
+  extra tools. New `--project <dir>` option (or `QA_PROBE_PROJECT_DIR`) lets a desktop app start
+  qa-probe inside the user's project folder. See `mcpb/README.md`.
+
 ### Fixed
 
 - A frontend call is matched to the backend both with and without the configured API prefix

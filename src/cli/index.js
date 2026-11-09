@@ -3,12 +3,26 @@
 const { Command } = require('commander');
 const pkg = require('../../package.json');
 
+function applyProjectDir(dir) {
+  if (!dir || !String(dir).trim()) return;
+  try {
+    process.chdir(String(dir));
+  } catch (err) {
+    console.error(`\nError: cannot use project folder "${dir}": ${err.message}`);
+    process.exit(1);
+  }
+}
+
 const program = new Command();
 
 program
   .name('qa-probe')
   .description('Local QA agent — maps frontend routes → backend APIs, probes live, scores pages 0–100')
-  .version(pkg.version);
+  .version(pkg.version)
+  .option('--project <dir>', 'run as if started in this project folder (or set QA_PROBE_PROJECT_DIR)');
+
+// Desktop apps start the server in their own folder, so let the caller name the project.
+program.hook('preAction', () => applyProjectDir(program.opts().project || process.env.QA_PROBE_PROJECT_DIR));
 
 program
   .command('analyze')

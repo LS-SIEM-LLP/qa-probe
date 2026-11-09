@@ -1,0 +1,84 @@
+{
+  "manifest_version": "0.2",
+  "name": "qa-probe",
+  "display_name": "qa-probe",
+  "version": "__VERSION__",
+  "description": "Checks that your running app still works after a change, and explains why pages are blank.",
+  "long_description": "qa-probe is a local QA agent for web apps. It reads your frontend source, maps every page to the API endpoints it calls, probes those endpoints live, and tells Claude the root cause when something is wrong. Claude can ask it to verify a change after editing code (it maps the changed files to the pages and endpoints they affect, probes them, and returns pass, fail or inconclusive with evidence), list what each page depends on and how strong the evidence is, and explain failures. It only reads your project and sends requests to the backend you configure. It never changes your data unless you explicitly allow it, and it redacts stack traces and SQL from what it shows Claude.",
+  "author": {
+    "name": "LS-SIEM LLP",
+    "url": "https://github.com/LS-SIEM-LLP"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LS-SIEM-LLP/qa-probe"
+  },
+  "homepage": "https://github.com/LS-SIEM-LLP/qa-probe",
+  "documentation": "https://github.com/LS-SIEM-LLP/qa-probe#readme",
+  "support": "https://github.com/LS-SIEM-LLP/qa-probe/issues",
+  "license": "Apache-2.0",
+  "keywords": ["qa", "testing", "api", "debugging", "react", "fastapi", "express", "mcp"],
+  "server": {
+    "type": "node",
+    "entry_point": "bin/qa-probe.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/bin/qa-probe.js",
+        "mcp",
+        "--project",
+        "${user_config.project_dir}",
+        "--config",
+        "${user_config.config_file}"
+      ],
+      "env": {
+        "QA_PROBE_USER": "${user_config.qa_user}",
+        "QA_PROBE_PASS": "${user_config.qa_password}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "qa_probe_verify_change", "description": "After you edit code, check that the running system still works, with evidence." },
+    { "name": "qa_probe_get_claims", "description": "What each page depends on and how strong the evidence is." },
+    { "name": "qa_probe_get_report", "description": "Show broken routes and their scores." },
+    { "name": "qa_probe_explain_failure", "description": "Explain why a page or endpoint is failing." },
+    { "name": "qa_probe_probe_endpoint", "description": "Live-probe one endpoint right now." },
+    { "name": "qa_probe_get_graph", "description": "Which backend routes a page calls." },
+    { "name": "qa_probe_get_blast_radius", "description": "Which pages break if an endpoint goes down." },
+    { "name": "qa_probe_suggest_fix", "description": "Suggest a fix for a diagnosed problem." },
+    { "name": "qa_probe_run_analysis", "description": "Run a full analysis and summarise it." },
+    { "name": "qa_probe_label", "description": "Record a verdict on a finding so it is reapplied on later runs." }
+  ],
+  "user_config": {
+    "project_dir": {
+      "type": "directory",
+      "title": "Project folder",
+      "description": "The folder of the web app you want qa-probe to check. It must contain your qa-probe config file.",
+      "required": true
+    },
+    "config_file": {
+      "type": "string",
+      "title": "Config file",
+      "description": "Name of the qa-probe config file inside the project folder.",
+      "default": "qa-probe.config.js",
+      "required": true
+    },
+    "qa_user": {
+      "type": "string",
+      "title": "Test account username (optional)",
+      "description": "A dedicated, low-privilege test account for the backend. Available to your config as QA_PROBE_USER. Never use a personal or admin account.",
+      "required": false
+    },
+    "qa_password": {
+      "type": "string",
+      "title": "Test account password (optional)",
+      "description": "Password for the test account. Stored securely by Claude Desktop and available to your config as QA_PROBE_PASS.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

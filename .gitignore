@@ -28,3 +28,6 @@ Thumbs.db
 
 # Example configs ship with the repo
 !examples/**/qa-probe.config.js
+
+# Built desktop extension
+dist-mcpb/
