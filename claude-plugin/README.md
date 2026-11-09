@@ -29,8 +29,12 @@ does not check that a page renders them correctly.
 ## Privacy Policy
 
 - **Data collected:** none by us. qa-probe has no telemetry, account or server of its own.
-- **Usage and storage:** it writes its cache, reports and any feedback you record to a `.qaprobe` folder
-  inside your project, on your machine. Delete the folder to remove them.
+- **Usage and storage:** it reads responses from the backend you configure and writes its cache, reports,
+  feedback you record, and a short snapshot (up to about 800 characters) of each probed response to a
+  `.qaprobe` folder inside your project, on your machine. If your backend returns personal data
+  (names, emails), a snapshot can contain some of it, so point qa-probe at a test environment with a
+  test account and test data. Stack traces, SQL and table names are redacted before anything is
+  shown to Claude. Delete the folder to remove everything it stored.
 - **Third-party sharing:** none. The only network traffic is requests to the backend URL you configure
   (and, if you ask for runtime tracing, to your own frontend).
 - **Retention:** nothing is kept outside your machine. Files in `.qaprobe` stay until you delete them.
