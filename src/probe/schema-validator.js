@@ -25,10 +25,12 @@ function validateSchema(body, responseSchema) {
 function formatIssue(issue) {
   const field = issue.path && issue.path.length > 0 ? issue.path.join('.') : '(root)';
   if (issue.code === 'invalid_type') {
-    if (issue.received === 'undefined') {
+    // zod 3 gives `issue.received`; zod 4 only puts it in the message ("... received undefined").
+    const received = issue.received || (/received (\w+)/.exec(String(issue.message || '')) || [])[1] || 'unknown';
+    if (received === 'undefined') {
       return `Missing required field: "${field}"`;
     }
-    return `Type mismatch at "${field}": expected ${issue.expected}, got ${issue.received}`;
+    return `Type mismatch at "${field}": expected ${issue.expected}, got ${received}`;
   }
   return `${field}: ${issue.message}`;
 }

@@ -30,7 +30,7 @@
   "dependencies": {
     "@babel/parser": "^7.24.0",
     "@babel/traverse": "^7.24.0",
-    "@faker-js/faker": "^9.0.0",
+    "@faker-js/faker": "^10.6.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "axios": "^1.6.0",
     "chalk": "~4.1.2",
@@ -39,7 +39,7 @@
     "eventsource": "^2.0.2",
     "ora": "^5.4.1",
     "ws": "^8.16.0",
-    "zod": "^3.22.0"
+    "zod": "^4.6.7"
   },
   "keywords": [
     "qa",

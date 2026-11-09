@@ -44,7 +44,7 @@ const OtelSchema = z.object({
 
 const PersonaSchema = z.object({
   name: z.string(),
-  auth: z.record(z.any()).default({}),
+  auth: z.record(z.string(), z.any()).prefault({}),
 });
 
 const SecuritySchema = z.object({
@@ -67,7 +67,7 @@ const SecurityChecksSchema = z.object({
   pii: z.boolean().default(true),
   piiAllow: z.array(z.string()).default([]),
   personas: z.array(PersonaSchema).default([]),
-  policies: z.record(z.record(z.number())).default({}),
+  policies: z.record(z.string(), z.record(z.string(), z.number())).prefault({}),
 });
 
 // Read-only response assertions, keyed by "METHOD path".
@@ -85,7 +85,7 @@ const AssertionRuleSchema = z.object({
   minItems: z.number().optional(),
   maxItems: z.number().optional(),
 }).passthrough();
-const AssertionsSchema = z.record(z.array(AssertionRuleSchema));
+const AssertionsSchema = z.record(z.string(), z.array(AssertionRuleSchema));
 
 // Write-flow (CRUD-chain) testing — opt-in, mutating.
 const WriteFlowStepSchema = z.object({
@@ -137,7 +137,7 @@ const AnalyzeRuntimeSchema = z.object({
   viewport: z.object({
     width: z.number().default(1280),
     height: z.number().default(720),
-  }).default({}),
+  }).prefault({}),
   navigationTimeoutMs: z.number().default(30000),
   captureWindowMs: z.number().default(5000),
 });
@@ -154,9 +154,9 @@ const LlmRepairSchema = z.object({
 });
 
 const AnalyzeSchema = z.object({
-  runtime: AnalyzeRuntimeSchema.default({}),
-  llmRepair: LlmRepairSchema.default({}),
-  har: HarImportSchema.default({}),
+  runtime: AnalyzeRuntimeSchema.prefault({}),
+  llmRepair: LlmRepairSchema.prefault({}),
+  har: HarImportSchema.prefault({}),
 });
 
 const ProbeSchema = z.object({
@@ -173,16 +173,16 @@ const ProbeSchema = z.object({
   generatedSamplePaths: z.array(z.string()).default([]),
   safePosts: z.array(z.string()).default([]),
   postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example', 'har']).default('minimal'),
-  postBodyOverrides: z.record(z.enum(['empty', 'minimal', 'realistic', 'example', 'har'])).default({}),
-  pathParamValues: z.record(z.string()).default({ id: '1' }),
-  sse: SseSchema.default({}),
-  ws: WsSchema.default({}),
-  visual: VisualProbeSchema.default({}),
-  otel: OtelSchema.default({}),
+  postBodyOverrides: z.record(z.string(), z.enum(['empty', 'minimal', 'realistic', 'example', 'har'])).prefault({}),
+  pathParamValues: z.record(z.string(), z.string()).default({ id: '1' }),
+  sse: SseSchema.prefault({}),
+  ws: WsSchema.prefault({}),
+  visual: VisualProbeSchema.prefault({}),
+  otel: OtelSchema.prefault({}),
   personas: z.array(PersonaSchema).default([]),
-  security: SecuritySchema.default({}),
-  harReplay: HarReplaySchema.default({}),
-  schemathesis: SchemathesisSchema.default({}),
+  security: SecuritySchema.prefault({}),
+  harReplay: HarReplaySchema.prefault({}),
+  schemathesis: SchemathesisSchema.prefault({}),
 });
 
 const ScoringSchema = z.object({
@@ -212,7 +212,7 @@ const ReportCoverageSchema = z.object({
 });
 
 const ReportSchema = z.object({
-  coverage: ReportCoverageSchema.default({}),
+  coverage: ReportCoverageSchema.prefault({}),
   baselineRuns: z.number().default(20),
 });
 
@@ -224,8 +224,8 @@ const ConfigSchema = z.object({
   openApiUrl: z.string().default('/openapi.json'),
   openApiFile: z.string().nullable().default(null),
   featureStatusUrl: z.string().nullable().default('/health/features'),
-  graphql: GraphqlSchema.default({}),
-  trpc: TrpcSchema.default({}),
+  graphql: GraphqlSchema.prefault({}),
+  trpc: TrpcSchema.prefault({}),
 
   // Frontend source
   frontendSrc: z.string().default('./frontend/src'),
@@ -233,29 +233,29 @@ const ConfigSchema = z.object({
   apiClientFile: z.string().nullable().default(null),
 
   // Auth
-  auth: AuthSchema.default({}),
+  auth: AuthSchema.prefault({}),
 
   // Probe behavior
-  analyze: AnalyzeSchema.default({}),
-  probe: ProbeSchema.default({}),
+  analyze: AnalyzeSchema.prefault({}),
+  probe: ProbeSchema.prefault({}),
 
   // Scoring
-  scoring: ScoringSchema.default({}),
+  scoring: ScoringSchema.prefault({}),
 
   // Output
-  output: OutputSchema.default({}),
+  output: OutputSchema.prefault({}),
 
   // Report add-ons
-  report: ReportSchema.default({}),
+  report: ReportSchema.prefault({}),
 
   // Security checks (auth-bypass / privilege-escalation / PII) — opt-in.
-  security: SecurityChecksSchema.default({}),
+  security: SecurityChecksSchema.prefault({}),
 
   // Read-only response assertions, keyed by "METHOD path".
   assertions: AssertionsSchema.optional(),
 
   // Write-flow (CRUD-chain) testing — opt-in, mutating.
-  writeFlows: WriteFlowsSchema.default({}),
+  writeFlows: WriteFlowsSchema.prefault({}),
 
   // Optional: relocate the feedback store (default <output.dir>/feedback.json).
   feedbackFile: z.string().optional(),
@@ -269,7 +269,7 @@ const ConfigSchema = z.object({
   // Optional: map path prefixes to custom HAS_* flag names for feature_flag_disabled hints.
   // Auto-derived as HAS_SOME_FEATURE from /some-feature when not specified.
   // Example: { '/credential-scanner': 'HAS_DEFAULT_CRED_SCANNER' }
-  featureFlagMap: z.record(z.string()).default({}),
+  featureFlagMap: z.record(z.string(), z.string()).prefault({}),
 });
 
 module.exports = { ConfigSchema };
