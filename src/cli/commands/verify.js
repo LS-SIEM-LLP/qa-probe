@@ -44,8 +44,9 @@ module.exports = async function verify(opts) {
     const result = await verifyChange({ changedFiles: files, graph, config, all: !!opts.all });
     if (opts.json) console.log(JSON.stringify(result, null, 2));
     else printHuman(result);
-    // Only a proven failure fails the run; "inconclusive" is reported but does not block.
-    process.exit(result.verdict === 'fail' ? 1 : 0);
+    // Only a proven failure fails the run, unless --strict also fails "inconclusive" (nothing proven either way).
+    const failed = result.verdict === 'fail' || (opts.strict && result.verdict === 'inconclusive');
+    process.exit(failed ? 1 : 0);
   } catch (err) {
     console.error(`\nError: ${err.message}`);
     if (process.env.DEBUG) console.error(err.stack);

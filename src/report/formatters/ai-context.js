@@ -102,7 +102,7 @@ function writeAiContext(report, graph, config) {
     lines.push(`HEALTHY ROUTES (${healthy.length}): ${healthy.slice(0, 20).join(', ')}${healthy.length > 20 ? ' ...' : ''}`);
   }
 
-  const outPath = path.join(process.cwd(), config.output.dir, 'ai-context.md');
+  const outPath = path.resolve(process.cwd(), config.output.dir, 'ai-context.md');
   fs.writeFileSync(outPath, lines.join('\n'), 'utf8');
   return outPath;
 }

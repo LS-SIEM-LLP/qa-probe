@@ -175,3 +175,32 @@ test('a 403 for the test account and a timing-out stream are not failures', () =
   assert.strictEqual(judgeProbe({ status: null, error: 'timeout' }, { rootCause: 'timeout' }, '/alerts/stream').verdict, 'unverified');
   assert.strictEqual(judgeProbe({ status: null, error: 'timeout' }, { rootCause: 'timeout' }, '/alerts').verdict, 'broken');
 });
+
+test('a detail route is probed with an id taken from its collection', async () => {
+  const idd = require('../probe/id-discovery');
+  const g = {
+    backendRoutes: { 'GET /items': {}, 'GET /items/{id}': {} },
+    blastRadius: { 'GET /items/{id}': { calledByRoutes: ['/items'], calledByCount: 1 } },
+    frontendRoutes: { '/items': { component: 'Items', apiCalls: [{ method: 'GET', path: '/api/items/1', matchedBackendRoute: 'GET /items/{id}', callSite: 'routes/items.tsx:3' }] } },
+  };
+  const seen = [];
+  const deps = {
+    collectEndpoints: () => [
+      { path: '/items', method: 'GET', routeKey: 'GET /items', type: 'http' },
+      { path: '/items/1', method: 'GET', routeKey: 'GET /items/{id}', type: 'http' },
+    ],
+    createHttpClient: () => ({}),
+    authenticate: async () => ({}),
+    idDiscovery: idd,
+    probeEndpoint: async (endpoint) => {
+      seen.push(endpoint.path);
+      return endpoint.method === 'GET' && endpoint.path === '/items'
+        ? { status: 200, empty: false, schemaErrors: [], firstItem: { id: 'real-42' }, routeKey: 'GET /items' }
+        : { status: 200, empty: false, schemaErrors: [] };
+    },
+    classifyEndpoint: () => ({ rootCause: 'ok' }),
+  };
+  const res = await verifyChange({ changedFiles: ['routes/items.tsx'], graph: g, config: { baseUrl: 'http://x', probe: {} } }, deps);
+  assert.ok(seen.includes('/items/real-42'), `expected the real id to be used, probed: ${seen.join(', ')}`);
+  assert.strictEqual(res.verdict, 'pass');
+});

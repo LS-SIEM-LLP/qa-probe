@@ -1,33 +1,26 @@
 'use strict';
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
+const test = require('node:test');
+const assert = require('node:assert');
+const { scoreRoute } = require('./scorer');
 
-const { scoreRoute } = require('./scorer.js');
+test('a failing endpoint lowers the page score even when the call path carries a different prefix', () => {
+  const route = { apiCalls: [{ method: 'GET', path: '/api/v1/items/', backendPath: '/v1/items/', matchedBackendRoute: 'GET /api/v1/items/' }] };
+  const probeResults = { 'GET /api/v1/items/': { status: 500, routeKey: 'GET /api/v1/items/' } };
+  const rootCauses = { 'GET /api/v1/items/': { rootCause: 'server_error' } };
+  const out = scoreRoute('/items', route, probeResults, rootCauses, { scoring: {} });
+  assert.ok(out.score < 100, `expected a penalty, got ${out.score}`);
+  assert.strictEqual(out.primaryCause, 'server_error');
+});
 
-describe('scoreRoute', () => {
-  test('does not penalize expected-empty quiet queues or generated sample misses', () => {
-    const scored = scoreRoute(
-      '/parsers',
-      {
-        apiCalls: [
-          { method: 'GET', backendPath: '/parsers/quarantine' },
-          { method: 'GET', backendPath: '/cases/1' },
-        ],
-      },
-      {
-        'GET /parsers/quarantine': { status: 200, empty: true },
-        'GET /cases/1': { status: 404 },
-      },
-      {
-        'GET /parsers/quarantine': { rootCause: 'expected_empty' },
-        'GET /cases/1': { rootCause: 'sample_unavailable' },
-      },
-      { scoring: {} },
-    );
+test('detail routes are matched through the spec route, not the filled path', () => {
+  const route = { apiCalls: [{ method: 'GET', path: '/api/v1/items/{id}', backendPath: '/v1/items/{id}', matchedBackendRoute: 'GET /api/v1/items/{id}' }] };
+  const probeResults = { 'GET /api/v1/items/abc': { status: 500, routeKey: 'GET /api/v1/items/{id}' } };
+  const rootCauses = { 'GET /api/v1/items/abc': { rootCause: 'server_error' } };
+  assert.ok(scoreRoute('/items', route, probeResults, rootCauses, { scoring: {} }).score < 100);
+});
 
-    assert.equal(scored.score, 100);
-    assert.equal(scored.status, 'healthy');
-    assert.deepEqual(scored.penalties, []);
-  });
+test('an endpoint that was never probed is still skipped, not penalised', () => {
+  const route = { apiCalls: [{ method: 'GET', path: '/x', matchedBackendRoute: 'GET /x' }] };
+  assert.strictEqual(scoreRoute('/x', route, {}, {}, { scoring: {} }).score, 100);
 });

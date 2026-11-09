@@ -51,8 +51,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The demo app's spec now marks `displayName` as required, so its field-name mismatch is caught as
   `missing_required_field`.
 
+- `verify --strict` also exits non-zero when the result is inconclusive (for CI). `verify` now
+  fetches a real id from a detail route's collection before probing it, like `probe` does.
+- Sign-in for apps that use the standard FastAPI OAuth2 password form: the login is tried as JSON
+  and retried as a form when the server answers 422 or 415 (`auth.loginFormat`: auto, json, form).
+- Browser tracing can start signed in: `analyze.runtime.tokenStorageKey` puts the probe's token in
+  local storage under that key (single-page apps), and login cookies are carried over for apps
+  that use an httpOnly cookie. `--runtime` now really turns on the probe sign-in.
+- UUID path parameters get a well-formed UUID sample instead of `1`.
+
 ### Fixed
 
+- **Scoring:** a failing endpoint could leave its page at 100/100 when the frontend call path carried
+  a prefix the spec did not (for example `/api/v1`). Results are now matched through the spec route.
+- The report crashed when `output.dir` was an absolute path.
+- Detail routes were not given ids harvested from a collection whose path ends in `/`.
 - A frontend call is matched to the backend both with and without the configured API prefix
   stripped, so backends that serve the full path (for example `/api/v1/items`) match.
 - When discovery finds 0 routes or 0 API calls, `analyze` now says so plainly and points to
@@ -62,9 +75,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - LightShield SIEM (FastAPI + React): 90 routes, 739 API calls, 1135 backend routes, unchanged by
   this release; 652 endpoints probed read-only.
-- `fastapi/full-stack-fastapi-template` (generated SDK + TanStack Router), static analysis only:
-  from 0 routes and 0 calls to 9 routes and 17 calls. 8 of the 17 calls are attributed to a page; the
-  rest come from shared components and are listed as unattributed.
+- `fastapi/full-stack-fastapi-template` (generated SDK + TanStack Router), running locally in Docker
+  with its database: 8 pages, 17 call sites, all matched to the 22 backend routes; analyze, probe,
+  report, `verify` (frontend and backend files) and a signed-in browser trace (10 real requests) all
+  work. Running it found three bugs, fixed here: form-encoded login, the scoring prefix bug, and the
+  absolute output folder crash.
 
 ---
 

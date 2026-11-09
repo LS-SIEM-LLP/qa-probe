@@ -5,6 +5,9 @@ const { z } = require('zod');
 const AuthSchema = z.object({
   type: z.enum(['bearer', 'cookie', 'api-key', 'none']).default('bearer'),
   loginUrl: z.string().default('/auth/login'),
+  // How the login request is sent. 'auto' tries JSON, then a form body if the server answers 415 or 422
+  // (the standard FastAPI OAuth2 password form).
+  loginFormat: z.enum(['auto', 'json', 'form']).default('auto'),
   credentials: z.object({
     username: z.string(),
     password: z.string(),
@@ -141,9 +144,16 @@ const AnalyzeRuntimeSchema = z.object({
   navigationTimeoutMs: z.number().default(30000),
   captureWindowMs: z.number().default(5000),
   // Sign in the same way the probe does and send that header from the browser too, so pages behind a login can be traced.
-  useProbeAuth: z.boolean().default(false),
+  useProbeAuth: z.boolean().optional(),
   // Path to an existing Chromium when Playwright's own browser is not installed.
   executablePath: z.string().optional(),
+  // Single-page apps usually keep the login token in the browser's local storage under a fixed key
+  // (for example 'access_token'). Name it and the trace starts already signed in, using the probe's own login.
+  tokenStorageKey: z.string().optional(),
+  localStorageItems: z.record(z.string(), z.string()).optional(),
+  // Cookies set by the probe's login (apps that sign the browser in with an httpOnly cookie).
+  useProbeCookies: z.boolean().optional(),
+  cookies: z.array(z.string()).optional(),
   extraHTTPHeaders: z.record(z.string(), z.string()).optional(),
 });
 
@@ -179,7 +189,7 @@ const ProbeSchema = z.object({
   safePosts: z.array(z.string()).default([]),
   postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example', 'har']).default('minimal'),
   postBodyOverrides: z.record(z.string(), z.enum(['empty', 'minimal', 'realistic', 'example', 'har'])).prefault({}),
-  pathParamValues: z.record(z.string(), z.string()).default({ id: '1' }),
+  pathParamValues: z.record(z.string(), z.string()).prefault({}),
   // Values for required query parameters, by name, when the spec gives none (for example { center_entity: 'host-1' }).
   queryParamValues: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).prefault({}),
   sse: SseSchema.prefault({}),

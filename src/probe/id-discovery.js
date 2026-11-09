@@ -37,7 +37,7 @@ function harvestCollectionItems(results) {
     if (!r || !r.firstItem) continue;
     const [method, path] = key.split(' ');
     if (method !== 'GET' || !path) continue;
-    byPath.set(path, r.firstItem);
+    byPath.set(path.replace(/\/+$/, ''), r.firstItem);
   }
   return byPath;
 }

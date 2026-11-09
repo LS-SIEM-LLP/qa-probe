@@ -103,6 +103,7 @@ program
   .option('--git [ref]', 'use files changed against a git ref (default HEAD)')
   .option('--all', 'probe every known endpoint, not only the affected ones')
   .option('--json', 'print the result as JSON')
+  .option('--strict', 'also exit non-zero when the result is inconclusive (for CI)')
   .action((opts) => {
     require('./commands/verify')(opts);
   });

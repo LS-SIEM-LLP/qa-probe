@@ -78,6 +78,11 @@ function normalizeOpenApiRoutes(openapi) {
 
         // Collect path parameters
         const parameters = (op.parameters || []).filter(p => p.in === 'path').map(p => p.name);
+        const pathParamTypes = {};
+        for (const p of (op.parameters || []).filter(x => x.in === 'path')) {
+          const sch = resolveSchema(p.schema || {}, openapi) || {};
+          pathParamTypes[p.name] = { type: sch.type || null, format: sch.format || null };
+        }
 
         // Required query parameters: without them the server answers 422 for a perfectly
         // healthy endpoint, so remember them and let the probe send sample values.
@@ -101,6 +106,7 @@ function normalizeOpenApiRoutes(openapi) {
           tags: op.tags || [],
           requiresAuth,
           parameters,
+          pathParamTypes,
           queryParams,
           requestBody,
           responseSchema,

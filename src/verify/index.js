@@ -264,10 +264,36 @@ async function verifyChange({ changedFiles, graph, config, all = false }, deps =
     }
   }
 
+  // Detail routes (/items/{id}) need a real id. Probe the collection each one belongs to first,
+  // take an id from its first item, and fill it in, as `qa-probe probe` does.
+  const probedFor = new Map(); // "METHOD /path" -> raw result, so ids can be harvested
+  const idd = deps.idDiscovery || require('../probe/id-discovery');
+  const needIds = probeable.filter((e) => idd.hasPathParam(e.routeKey || e.path));
+  if (needIds.length) {
+    const have = new Set(probeable.map((e) => e.routeKey));
+    const helpers = [];
+    for (const endpoint of needIds) {
+      const collection = String(endpoint.routeKey).replace(/\/\{[^}]+\}.*$/, '');
+      // routeKey is "GET /items/{id}", so the collection is "GET /items" (or "GET /items/").
+      const helperKey = collection.replace(/^\w+/, 'GET');
+      const found = collect(graph, config).find((e) => e.type === 'http' && e.method === 'GET' && String(e.routeKey).replace(/\/+$/, '') === helperKey.replace(/\/+$/, ''));
+      if (found && !have.has(found.routeKey) && !helpers.some((h) => h.routeKey === found.routeKey)) helpers.push(found);
+    }
+    for (const helper of helpers) {
+      const result = await probeEndpoint(helper, headers, http, graph, config);
+      probedFor.set(`${helper.method} ${helper.path}`, result);
+    }
+  }
+
   const results = [];
-  for (const endpoint of probeable) {
+  const ordered = [...probeable.filter((e) => !idd.hasPathParam(e.routeKey || e.path)), ...needIds];
+  for (const endpoint of ordered) {
     const meta = selection.endpoints.find((e) => e.routeKey === endpoint.routeKey);
+    if (idd.hasPathParam(endpoint.routeKey || endpoint.path) && probedFor.size) {
+      idd.applyDiscoveredIds([endpoint], idd.harvestCollectionItems(Object.fromEntries(probedFor)), config);
+    }
     const probe = await probeEndpoint(endpoint, headers, http, graph, config);
+    probedFor.set(`${endpoint.method} ${endpoint.path}`, probe);
     const key = `${endpoint.method} ${endpoint.path}`;
     const cause = classify(key, probe, graph, config);
     const judged = judgeProbe(probe, cause, endpoint.path);

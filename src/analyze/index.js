@@ -60,11 +60,19 @@ async function runAnalyze(config, opts = {}) {
 
   let runtimeTrace = null;
   if (config.analyze && config.analyze.runtime && config.analyze.runtime.enabled) {
+    if (config.analyze.runtime.tokenStorageKey && config.analyze.runtime.useProbeAuth === undefined) {
+      config.analyze.runtime.useProbeAuth = true;
+    }
     if (config.analyze.runtime.useProbeAuth && !config.analyze.runtime.extraHTTPHeaders) {
       try {
-        const { authenticate } = require('../probe/authenticator');
+        const { login } = require('../probe/authenticator');
         const authHttp = createHttpClient(config);
-        config.analyze.runtime.extraHTTPHeaders = await authenticate(config, authHttp);
+        const signedIn = await login(config, authHttp);
+        config.analyze.runtime.extraHTTPHeaders = signedIn.headers;
+        if (config.analyze.runtime.useProbeCookies !== false && signedIn.cookies.length) config.analyze.runtime.cookies = signedIn.cookies;
+        const key = config.analyze.runtime.tokenStorageKey;
+        const bearer = String((config.analyze.runtime.extraHTTPHeaders || {}).Authorization || '').replace(/^Bearer\s+/i, '');
+        if (key && bearer) config.analyze.runtime.localStorageItems = { ...(config.analyze.runtime.localStorageItems || {}), [key]: bearer };
       } catch (err) {
         warnings.push({ phase: 'runtime-trace', error: `Could not sign in for runtime tracing: ${err.message}` });
       }

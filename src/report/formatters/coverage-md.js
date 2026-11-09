@@ -5,7 +5,7 @@ const path = require('path');
 
 function writeCoverageMarkdown(coverage, config) {
   const lines = renderCoverageMarkdown(coverage);
-  const outPath = path.join(process.cwd(), config.output.dir, 'coverage.md');
+  const outPath = path.resolve(process.cwd(), config.output.dir, 'coverage.md');
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, lines.join('\n'), 'utf8');
   return outPath;

@@ -72,3 +72,9 @@ describe('applyDiscoveredIds', () => {
     assert.equal(eps[0].path, '/cases/1', 'path unchanged when no discovery');
   });
 });
+
+test('a collection probed with a trailing slash still supplies ids to its detail routes', () => {
+  const { harvestCollectionItems, discoverFills } = require('./id-discovery');
+  const items = harvestCollectionItems({ 'GET /api/v1/items/': { firstItem: { id: 'abc-123', title: 't' } } });
+  assert.deepStrictEqual(discoverFills('GET /api/v1/items/{id}', items), { id: 'abc-123' });
+});

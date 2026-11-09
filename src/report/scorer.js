@@ -1,5 +1,20 @@
 'use strict';
 
+const routeKeyIndexes = new WeakMap();
+
+/** Map from a spec route ("GET /items/{id}") to the key its probe result is stored under. */
+function routeKeyIndex(probeResults) {
+  let index = routeKeyIndexes.get(probeResults);
+  if (!index) {
+    index = new Map();
+    for (const [key, result] of Object.entries(probeResults || {})) {
+      if (result && typeof result === 'object' && result.routeKey && !index.has(result.routeKey)) index.set(result.routeKey, key);
+    }
+    routeKeyIndexes.set(probeResults, index);
+  }
+  return index;
+}
+
 /**
  * Score a frontend route 0–100.
  * Starts at 100 and deducts points for each broken/degraded API call.
@@ -17,7 +32,13 @@ function scoreRoute(routePath, routeData, probeResults, rootCauses, config) {
   const penalties = [];
 
   for (const call of apiCalls) {
-    const probeKey = `${call.method} ${call.backendPath || call.path}`;
+    let probeKey = `${call.method} ${call.backendPath || call.path}`;
+    // The probe stores results under the full (filled) path; the call may carry a prefix-stripped
+    // one. Match through the spec route so a prefix such as /api/v1 cannot hide a failing endpoint.
+    if (!probeResults[probeKey] && call.matchedBackendRoute) {
+      const viaRoute = routeKeyIndex(probeResults).get(call.matchedBackendRoute);
+      if (viaRoute) probeKey = viaRoute;
+    }
     const probe = probeResults[probeKey];
     const cause = rootCauses[probeKey];
 

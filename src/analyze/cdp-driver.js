@@ -45,6 +45,19 @@ function createCdpDriver(runtimeConfig = {}) {
         ignoreHTTPSErrors: !!runtimeConfig.ignoreHTTPSErrors,
         ...(runtimeConfig.extraHTTPHeaders ? { extraHTTPHeaders: runtimeConfig.extraHTTPHeaders } : {}),
       });
+      if (runtimeConfig.localStorageItems && Object.keys(runtimeConfig.localStorageItems).length) {
+        await context.addInitScript((items) => {
+          try { for (const [k, v] of Object.entries(items)) window.localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ }
+        }, runtimeConfig.localStorageItems);
+      }
+      if (runtimeConfig.cookies && runtimeConfig.cookies.length && runtimeConfig.baseUrl) {
+        const cookies = runtimeConfig.cookies.map((line) => {
+          const [pair] = String(line).split(';');
+          const eq = pair.indexOf('=');
+          return eq > 0 ? { name: pair.slice(0, eq).trim(), value: pair.slice(eq + 1).trim(), url: runtimeConfig.baseUrl } : null;
+        }).filter(Boolean);
+        if (cookies.length) await context.addCookies(cookies);
+      }
       const page = await context.newPage();
       const requests = [];
       let domSnapshot = null;

@@ -115,3 +115,12 @@ test('a page behind a guard and a helper call is found, not the guard', () => {
   assert.strictEqual(routes.get('/plain').component, 'Plain');
   void parse; void traverse;
 });
+
+test('--runtime turns on probe sign-in unless the config says otherwise', () => {
+  const { applyEvidenceOptions } = require('../cli/evidence-options');
+  const c1 = applyEvidenceOptions({ analyze: { runtime: {} } }, { runtime: true, frontendUrl: 'http://x' });
+  assert.strictEqual(c1.analyze.runtime.useProbeAuth, true);
+  const c2 = applyEvidenceOptions({ analyze: { runtime: { useProbeAuth: false } } }, { runtime: true, frontendUrl: 'http://x' });
+  assert.strictEqual(c2.analyze.runtime.useProbeAuth, false);
+  assert.throws(() => applyEvidenceOptions({ analyze: { runtime: {} } }, { runtime: true }), /frontend-url/);
+});

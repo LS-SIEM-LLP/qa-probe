@@ -4,10 +4,15 @@
  * Fill path parameters in a route pattern.
  * /items/{id}/tags → /items/1/tags (using pathParamValues from config)
  */
-function fillPathParams(routePath, config) {
-  const paramValues = config.probe.pathParamValues || {};
+function fillPathParams(routePath, config, routeInfo) {
+  const paramValues = (config.probe && config.probe.pathParamValues) || {};
+  const types = (routeInfo && routeInfo.pathParamTypes) || {};
   return routePath.replace(/\{([^}]+)\}/g, (_, name) => {
-    return paramValues[name] || paramValues['id'] || '1';
+    if (paramValues[name]) return paramValues[name];
+    // A guessed "1" is rejected outright (422) when the id is a UUID, so use a well-formed one.
+    const t = types[name] || {};
+    if (t.format === 'uuid') return '00000000-0000-4000-8000-000000000001';
+    return paramValues['id'] || '1';
   });
 }
 
@@ -35,7 +40,7 @@ function collectEndpoints(graph, config) {
   // Collect from backend spec routes
   for (const [routeKey, routeInfo] of Object.entries(graph.backendRoutes || {})) {
     const [method, rawPath] = routeKey.split(' ');
-    const filledPath = fillPathParams(rawPath, config);
+    const filledPath = fillPathParams(rawPath, config, routeInfo);
 
     if (shouldSkip(filledPath)) continue;
 

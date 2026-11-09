@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 function writeHtmlReport(report, config) {
-  const outPath = path.join(process.cwd(), config.output.dir, 'report.html');
+  const outPath = path.resolve(process.cwd(), config.output.dir, 'report.html');
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, renderHtmlReport(report), 'utf8');
   return outPath;

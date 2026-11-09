@@ -125,7 +125,7 @@ function writeMarkdownReport(report, config) {
     }
   }
 
-  const outPath = path.join(process.cwd(), config.output.dir, 'report.md');
+  const outPath = path.resolve(process.cwd(), config.output.dir, 'report.md');
   fs.writeFileSync(outPath, lines.join('\n'), 'utf8');
   return outPath;
 }
