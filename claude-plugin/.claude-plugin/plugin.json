@@ -9,5 +9,19 @@
   "homepage": "https://github.com/LS-SIEM-LLP/qa-probe",
   "repository": "https://github.com/LS-SIEM-LLP/qa-probe",
   "license": "Apache-2.0",
-  "keywords": ["qa", "testing", "api", "debugging", "react", "fastapi", "express", "nextjs", "mcp"]
+  "keywords": [
+    "qa",
+    "testing",
+    "api",
+    "debugging",
+    "react",
+    "fastapi",
+    "express",
+    "nextjs",
+    "mcp"
+  ],
+  "documentationUrl": "https://github.com/LS-SIEM-LLP/qa-probe#readme",
+  "supportUrl": "https://github.com/LS-SIEM-LLP/qa-probe/issues",
+  "privacyPolicyUrl": "https://github.com/LS-SIEM-LLP/qa-probe/blob/main/claude-plugin/README.md#privacy-policy",
+  "termsOfServiceUrl": "https://github.com/LS-SIEM-LLP/qa-probe/blob/main/LICENSE"
 }
