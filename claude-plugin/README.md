@@ -36,7 +36,9 @@ does not check that a page renders them correctly.
   test account and test data. Stack traces, SQL and table names are redacted before anything is
   shown to Claude. Delete the folder to remove everything it stored.
 - **Third-party sharing:** none. The only network traffic is requests to the backend URL you configure
-  (and, if you ask for runtime tracing, to your own frontend).
+  (and, if you ask for runtime tracing, to your own frontend), plus the one-time download of the
+  `qa-probe` package from the npm registry when the plugin starts. The login details in your config are
+  sent only to the login address of the backend you configure.
 - **Retention:** nothing is kept outside your machine. Files in `.qaprobe` stay until you delete them.
 - **Contact:** [github.com/LS-SIEM-LLP/qa-probe/issues](https://github.com/LS-SIEM-LLP/qa-probe/issues)
 
