@@ -1,8 +1,8 @@
 {
   "name": "qa-probe",
   "displayName": "qa-probe",
-  "version": "2.14.0",
-  "description": "Checks that your running web app still works after a change, and explains why pages are blank. Maps your frontend to its API, probes it live, and reports pass, fail or inconclusive with evidence.",
+  "version": "2.14.1",
+  "description": "A skill that has Claude check that your running web app still works after a change, using the qa-probe command line. Reports pass, fail or inconclusive with evidence.",
   "author": {
     "name": "LS-SIEM LLP",
     "url": "https://github.com/LS-SIEM-LLP"
