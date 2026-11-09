@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "qa-probe": {
+      "command": "npx",
+      "args": ["-y", "qa-probe@2.14.0", "mcp"]
+    }
+  }
+}

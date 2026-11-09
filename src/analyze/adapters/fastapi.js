@@ -79,11 +79,29 @@ function normalizeOpenApiRoutes(openapi) {
         // Collect path parameters
         const parameters = (op.parameters || []).filter(p => p.in === 'path').map(p => p.name);
 
+        // Required query parameters: without them the server answers 422 for a perfectly
+        // healthy endpoint, so remember them and let the probe send sample values.
+        const queryParams = (op.parameters || [])
+          .filter(p => p.in === 'query' && p.required)
+          .map(p => {
+            const schema = resolveSchema(p.schema || {}, openapi) || {};
+            return {
+              name: p.name,
+              type: schema.type || null,
+              format: schema.format || null,
+              enum: Array.isArray(schema.enum) ? schema.enum : null,
+              default: schema.default === undefined ? null : schema.default,
+              example: p.example !== undefined ? p.example : (schema.example === undefined ? null : schema.example),
+              minimum: typeof schema.minimum === 'number' ? schema.minimum : null,
+            };
+          });
+
         routes[key] = {
           summary: op.summary || '',
           tags: op.tags || [],
           requiresAuth,
           parameters,
+          queryParams,
           requestBody,
           responseSchema,
           deprecated: !!op.deprecated,

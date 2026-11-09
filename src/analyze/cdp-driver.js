@@ -23,7 +23,16 @@ function createCdpDriver(runtimeConfig = {}) {
 
   async function getBrowser() {
     if (!browserPromise) {
-      browserPromise = browserType.launch({ headless: true });
+      const executablePath = runtimeConfig.executablePath || process.env.QA_PROBE_BROWSER_PATH || undefined;
+      browserPromise = browserType.launch({ headless: true, ...(executablePath ? { executablePath } : {}) }).catch((err) => {
+        if (/Executable doesn't exist|browserType\.launch/.test(String(err.message))) {
+          throw new Error(
+            'No browser is installed for runtime tracing. Run `npx playwright install chromium`, or point to an existing ' +
+            'Chromium with analyze.runtime.executablePath (or the QA_PROBE_BROWSER_PATH environment variable).'
+          );
+        }
+        throw err;
+      });
     }
     return browserPromise;
   }
@@ -34,6 +43,7 @@ function createCdpDriver(runtimeConfig = {}) {
       const context = await browser.newContext({
         viewport: runtimeConfig.viewport || { width: 1280, height: 720 },
         ignoreHTTPSErrors: !!runtimeConfig.ignoreHTTPSErrors,
+        ...(runtimeConfig.extraHTTPHeaders ? { extraHTTPHeaders: runtimeConfig.extraHTTPHeaders } : {}),
       });
       const page = await context.newPage();
       const requests = [];

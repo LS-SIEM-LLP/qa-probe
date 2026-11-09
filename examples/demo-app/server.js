@@ -15,7 +15,7 @@ const openapi = {
     '/auth/login': { post: { responses: { 200: { description: 'ok' } } } },
     '/alerts': { get: { responses: { 200: { description: 'list of alerts', content: { 'application/json': { schema: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer' }, title: { type: 'string' } } } } } } } } } },
     '/reports': { get: { responses: { 200: { description: 'reports' } } } },
-    '/settings': { get: { responses: { 200: { description: 'settings', content: { 'application/json': { schema: { type: 'object', properties: { displayName: { type: 'string' } } } } } } } } },
+    '/settings': { get: { responses: { 200: { description: 'settings', content: { 'application/json': { schema: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' } } } } } } } } },
   },
 };
 

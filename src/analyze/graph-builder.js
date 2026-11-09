@@ -14,6 +14,7 @@
  */
 
 const path = require('path');
+const { listSourceFiles, closureOf, routeFileFor } = require('./import-graph');
 
 function buildGraph({ frontendRoutes, apiCalls, runtimeCalls = null, runtimeDomSnapshots = null, backendSpec, config, warnings = [] }) {
   const { routes: backendRoutes, featureFlags, headless } = backendSpec;
@@ -63,6 +64,7 @@ function buildGraph({ frontendRoutes, apiCalls, runtimeCalls = null, runtimeDomS
         backendPath,
         matchedBackendRoute: matchKey || null,
         callSite: call.callSite,
+        ...(call.attributedVia ? { attributedVia: call.attributedVia } : {}),
         rawPath: call.rawPath,
         source: call.source || 'ast',
       };
@@ -148,6 +150,35 @@ function stripFrontendPrefix(p, prefix) {
  * Strategy: we look at the component name for a route and try to find matching files.
  * Also includes all API calls where we cannot identify a parent route.
  */
+function attributeByImports(result, frontendRoutes, callsByFile, usedCalls, srcDir) {
+  const pending = [...callsByFile.entries()].filter(([file, calls]) =>
+    calls.some((call) => !usedCalls.has(`${file}:${call.method}:${call.path}`)));
+  if (!pending.length) return;
+
+  let allFiles;
+  try { allFiles = listSourceFiles(srcDir); } catch { return; }
+  const cache = new Map();
+  const closures = [];
+  for (const [routePath, info] of frontendRoutes.entries()) {
+    const routeFile = routeFileFor(info, allFiles);
+    if (routeFile) closures.push({ routePath, files: closureOf(routeFile, srcDir, cache) });
+  }
+
+  for (const [file, calls] of pending) {
+    const owners = closures.filter((c) => c.files.has(path.resolve(file)));
+    if (!owners.length) continue;
+    for (const call of calls) {
+      const key = `${file}:${call.method}:${call.path}`;
+      if (usedCalls.has(key)) continue;
+      usedCalls.add(key);
+      for (const owner of owners) {
+        if (!result[owner.routePath]) continue;
+        result[owner.routePath].apiCallsList.push({ ...call, attributedVia: 'imports' });
+      }
+    }
+  }
+}
+
 function buildRouteToApiCallMap(frontendRoutes, apiCalls, config) {
   const result = {};
   const srcDir = path.resolve(process.cwd(), config.frontendSrc);
@@ -200,6 +231,10 @@ function buildRouteToApiCallMap(frontendRoutes, apiCalls, config) {
       }
     }
   }
+
+  // Calls made in shared components, hooks and helpers: attribute each one to every page that
+  // uses the file it lives in, found by following imports from the page's own file.
+  attributeByImports(result, frontendRoutes, callsByFile, usedCalls, srcDir);
 
   // Any remaining unmatched calls go to a synthetic "__unmatched__" bucket
   for (const [file, calls] of callsByFile.entries()) {

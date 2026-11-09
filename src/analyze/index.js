@@ -60,6 +60,15 @@ async function runAnalyze(config, opts = {}) {
 
   let runtimeTrace = null;
   if (config.analyze && config.analyze.runtime && config.analyze.runtime.enabled) {
+    if (config.analyze.runtime.useProbeAuth && !config.analyze.runtime.extraHTTPHeaders) {
+      try {
+        const { authenticate } = require('../probe/authenticator');
+        const authHttp = createHttpClient(config);
+        config.analyze.runtime.extraHTTPHeaders = await authenticate(config, authHttp);
+      } catch (err) {
+        warnings.push({ phase: 'runtime-trace', error: `Could not sign in for runtime tracing: ${err.message}` });
+      }
+    }
     spinner.start('Tracing frontend runtime network requests...');
     runtimeTrace = await traceRuntimeRoutes(frontendRoutes, config, { warnings });
     const runtimeCount = [...runtimeTrace.runtimeCalls.values()].reduce((sum, calls) => sum + calls.length, 0);

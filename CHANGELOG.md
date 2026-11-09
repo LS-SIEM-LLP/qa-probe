@@ -34,6 +34,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   extra tools. New `--project <dir>` option (or `QA_PROBE_PROJECT_DIR`) lets a desktop app start
   qa-probe inside the user's project folder. See `mcpb/README.md`.
 
+- Next.js routing: App Router (`app/**/page.tsx`, with route groups, parallel slots, dynamic and
+  catch-all segments) and Pages Router (`pages/**`, skipping `_app`, `_document` and `api/`).
+- Pages are attributed to the calls their shared components make: qa-probe follows imports
+  (relative paths, `@/` and `src/` aliases, index files) from each page file. On LightShield this
+  cut unattributed calls from 531 to 7.
+- Page components behind a guard or helper are recognised: `<ScopeRoute>{feature('Alerts', <Alerts />)}</ScopeRoute>`
+  is the Alerts page, not "ScopeRoute".
+- Required query parameters from the spec are now sent with sample values (or your own, in
+  `probe.queryParamValues`), so a healthy endpoint that needs `?center_entity=...` no longer
+  answers 422 and looks broken.
+- Runtime evidence from the command line: `--har <file>` imports a recorded .har file, and
+  `--runtime --frontend-url <url>` opens each page in a real browser and records the API calls it
+  makes (it signs in the way the probe does). Calls seen this way are marked `runtime-observed`.
+  `analyze.runtime.executablePath` (or `QA_PROBE_BROWSER_PATH`) uses an existing Chromium.
+- The demo app's spec now marks `displayName` as required, so its field-name mismatch is caught as
+  `missing_required_field`.
+
 ### Fixed
 
 - A frontend call is matched to the backend both with and without the configured API prefix

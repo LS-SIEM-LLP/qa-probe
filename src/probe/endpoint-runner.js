@@ -5,6 +5,7 @@ const { generateBody, resolvePostBodyMode, requestBodySchema } = require('./body
 const { inferShape } = require('./schema-history');
 const { createTraceContext, correlateTrace } = require('./otel-correlator');
 const { evaluateAssertions, assertionsForEndpoint } = require('./assertions');
+const { sampleQueryParams } = require('./query-params');
 
 const MAX_RETRIES = 2;
 
@@ -130,6 +131,7 @@ async function probeEndpoint(endpoint, headers, http, graph, config, attempt = 0
     const res = await http.request({
       method: method.toLowerCase(),
       url: endpointPath,
+      params: sampleQueryParams(routeInfo, config),
       headers: requestHeaders,
       data: requestBody,
       // Hard wall-clock abort (see resolveHardTimeoutMs) — covers streaming responses

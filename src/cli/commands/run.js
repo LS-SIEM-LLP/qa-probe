@@ -1,6 +1,7 @@
 'use strict';
 
 const { loadConfig } = require('../../config/loader');
+const { applyEvidenceOptions } = require('../evidence-options');
 const { runAnalyze } = require('../../analyze');
 const { runProbe } = require('../../probe');
 const { runReport } = require('../../report');
@@ -9,6 +10,7 @@ const { printGraphSummary, printProbeResults, printSummary } = require('../outpu
 module.exports = async function run(opts) {
   try {
     const config = loadConfig(opts.config);
+    applyEvidenceOptions(config, opts);
 
     // Phase 1: Analyze
     const graph = await runAnalyze(config, { headless: opts.headless });

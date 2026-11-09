@@ -71,3 +71,25 @@ test('a detail route that answers 404 or 422 to a guessed id is not reported as 
   assert.strictEqual(liveStatusFor('GET /cases/{case_id}', map({ status: 422 })).status, 'unverified');
   assert.strictEqual(liveStatusFor('GET /cases/{case_id}', map({ status: 500 })).status, 'broken');
 });
+
+test('the same relationship seen in source and in a browser is one claim, marked runtime-observed', () => {
+  const g = {
+    frontendRoutes: {
+      '/alerts': {
+        component: 'Alerts',
+        apiCalls: [
+          { method: 'GET', path: '/api/alerts', matchedBackendRoute: 'GET /alerts', callSite: 'components/Alerts.tsx:10', source: 'ast' },
+          { method: 'GET', path: '/api/alerts', matchedBackendRoute: 'GET /alerts', callSite: 'runtime:/alerts', source: 'runtime' },
+        ],
+      },
+    },
+  };
+  const out = buildClaims(g, {});
+  assert.strictEqual(out.totals.claims, 1);
+  assert.strictEqual(out.pages[0].claims[0].evidence, 'runtime-observed');
+});
+
+test('a generated-client call counts as source evidence, not runtime', () => {
+  const g = { frontendRoutes: { '/items': { component: 'Items', apiCalls: [{ method: 'GET', path: '/api/v1/items/', matchedBackendRoute: 'GET /api/v1/items/', callSite: 'routes/items.tsx:5', source: 'sdk' }] } } };
+  assert.strictEqual(buildClaims(g, {}).pages[0].claims[0].evidence, 'static-only');
+});

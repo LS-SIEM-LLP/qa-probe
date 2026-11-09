@@ -29,6 +29,9 @@ program
   .description('Parse frontend source + fetch backend OpenAPI spec → writes .qaprobe/graph.json')
   .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
   .option('--headless', 'skip OpenAPI fetch, discover endpoints from frontend source only')
+  .option('--har <file>', 'discover endpoints from a recorded .har file (real traffic, any stack)')
+  .option('--runtime', 'open each page in a real browser and record the API calls it makes')
+  .option('--frontend-url <url>', 'where the running frontend is served, for --runtime')
   .action((opts) => {
     require('./commands/analyze')(opts);
   });
@@ -85,6 +88,9 @@ program
   .option('-c, --config <path>', 'path to qa-probe.config.js', './qa-probe.config.js')
   .option('--fail-under <score>', 'exit 1 if overall score < N (CI gate)', parseInt)
   .option('--headless', 'skip OpenAPI fetch, discover endpoints from frontend source only')
+  .option('--har <file>', 'discover endpoints from a recorded .har file (real traffic, any stack)')
+  .option('--runtime', 'open each page in a real browser and record the API calls it makes')
+  .option('--frontend-url <url>', 'where the running frontend is served, for --runtime')
   .action((opts) => {
     require('./commands/run')(opts);
   });

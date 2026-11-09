@@ -58,6 +58,39 @@ function resolveJsxComponentName(node) {
   return null;
 }
 
+
+// Components that only wrap a page (auth guards, layouts, suspense). The page is inside them.
+const WRAPPER_NAME = /(Route|Guard|Layout|Suspense|Boundary|Provider|Protected|RequireAuth|Shell|Gate|Wrapper)$|^(Suspense|Fragment|React\.Suspense)$/;
+
+/** The page component for a route element, looking through wrappers such as <ScopeRoute><Alerts/></ScopeRoute>. */
+/** The first JSX element in a child: the element itself, or one passed to a helper like {feature('Alerts', <Alerts />)}. */
+function firstJsxElement(node, depth = 0) {
+  if (!node || depth > 4) return null;
+  if (node.type === 'JSXElement') return node;
+  if (node.type === 'JSXExpressionContainer') return firstJsxElement(node.expression, depth + 1);
+  if (node.type === 'CallExpression') {
+    for (const arg of node.arguments || []) {
+      const found = firstJsxElement(arg, depth + 1);
+      if (found) return found;
+    }
+  }
+  if (node.type === 'ArrowFunctionExpression' && node.body) return firstJsxElement(node.body, depth + 1);
+  return null;
+}
+
+function resolvePageComponent(node, depth = 0) {
+  const name = resolveJsxComponentName(node);
+  if (!name || depth > 6) return name;
+  if (!WRAPPER_NAME.test(name)) return name;
+  for (const child of (node.children || [])) {
+    const el = firstJsxElement(child);
+    if (!el) continue;
+    const inner = resolvePageComponent(el, depth + 1);
+    if (inner) return inner;
+  }
+  return name;
+}
+
 /**
  * Given an AST node for the value of a `path` property (e.g. StringLiteral),
  * return the string value or null.
@@ -124,9 +157,9 @@ function walkRouteConfigObject(objNode, parentPath, routes, options = {}) {
       // element: <Component />  — JSXElement inside expression container or directly
       const val = prop.value;
       if (val.type === 'JSXElement') {
-        componentName = resolveJsxComponentName(val);
+        componentName = resolvePageComponent(val);
       } else if (val.type === 'JSXExpressionContainer') {
-        componentName = resolveJsxComponentName(val.expression);
+        componentName = resolvePageComponent(val.expression);
       }
     } else if (keyName === 'component' || keyName === 'Component') {
       // component: MyComponent (Identifier)
@@ -431,7 +464,7 @@ function extractRoutes(routerFile, srcDir, options = {}) {
           if (expr.type === 'StringLiteral') {
             attrs[attrName] = expr.value;
           } else if (expr.type === 'JSXElement') {
-            attrs[attrName] = resolveJsxComponentName(expr);
+            attrs[attrName] = attrName === 'element' ? resolvePageComponent(expr) : resolveJsxComponentName(expr);
           } else if (expr.type === 'ArrayExpression') {
             attrs[attrName] = expr.elements
               .filter(e => e && e.type === 'StringLiteral')

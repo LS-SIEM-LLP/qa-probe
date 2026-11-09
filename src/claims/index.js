@@ -45,13 +45,22 @@ function buildClaims(graph, probeResults, { route = null, limit = 50 } = {}) {
   const pages = [];
   for (const [pageRoute, info] of Object.entries((graph && graph.frontendRoutes) || {})) {
     if (route && pageRoute !== route) continue;
-    const claims = (info.apiCalls || []).map((call) => {
+    // The same page-to-endpoint relationship can be seen both in source and in a browser:
+    // keep one claim, with the stronger evidence.
+    const merged = new Map();
+    for (const call of info.apiCalls || []) {
+      const id = `${call.matchedBackendRoute || `${call.method} ${call.backendPath || call.path}`}`;
+      const existing = merged.get(id);
+      const isRuntime = call.source && call.source !== 'ast' && call.source !== 'sdk';
+      if (!existing || (isRuntime && !(existing.source && existing.source !== 'ast' && existing.source !== 'sdk'))) merged.set(id, call);
+    }
+    const claims = [...merged.values()].map((call) => {
       const matched = call.matchedBackendRoute || null;
       const live = matched ? liveStatusFor(matched, probeByRoute) : { status: 'not-probed', detail: 'no matching backend route' };
       return {
         claim: `${pageRoute} depends on ${matched || `${call.method} ${call.backendPath || call.path}`}`,
         endpoint: matched,
-        evidence: !call.source || call.source === 'ast' ? 'static-only' : 'runtime-observed',
+        evidence: !call.source || call.source === 'ast' || call.source === 'sdk' ? 'static-only' : 'runtime-observed',
         foundAt: call.callSite || null,
         matchedInSpec: !!matched,
         live: live.status,

@@ -1,12 +1,14 @@
 'use strict';
 
 const { loadConfig } = require('../../config/loader');
+const { applyEvidenceOptions } = require('../evidence-options');
 const { runAnalyze } = require('../../analyze');
 const { printGraphSummary } = require('../output');
 
 module.exports = async function analyze(opts) {
   try {
     const config = loadConfig(opts.config);
+    applyEvidenceOptions(config, opts);
     if (opts.headless) config._headless = true;
     const graph = await runAnalyze(config, { headless: opts.headless });
     printGraphSummary(graph);

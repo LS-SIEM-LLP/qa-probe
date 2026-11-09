@@ -388,10 +388,15 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 - Detects visible HTTP calls, common hook patterns and generated SDK clients (hey-api and
   openapi-typescript-codegen styles). GraphQL clients, tRPC routers and custom service layers
   may need an adapter - or use HAR import to discover them from real traffic.
-- Pages are found from a `<Route>` tree or from TanStack Router file routes. Other file-based
-  routers (for example Next.js) are not read yet.
-- Calls made in shared components are attributed to a page by file and component name; the rest
-  are listed as unattributed rather than guessed.
+- Pages are found from a `<Route>` tree, TanStack Router file routes, or the Next.js App and
+  Pages routers. Other file-based routers (Remix, Nuxt, SvelteKit, Astro) are not read yet.
+- Calls made in shared components are attributed to every page that imports them, by following
+  imports from each page file. Anything still unattributed is listed, not guessed.
+- Only calls recorded from real traffic (`--har`, `--runtime`) are `runtime-observed`; everything
+  found in source is `static-only` and says so.
+- The probe checks responses against the spec. It does not read which fields your frontend code
+  expects, so a frontend that reads `displayName` while the spec says `display_name` is not
+  caught until the spec and the real response disagree.
 - If discovery finds 0 routes or 0 API calls, `analyze` warns that the result is not a clean
   bill of health. Record real traffic and import it (`analyze.har`) for any stack.
 - Dynamic URLs built by arbitrary factory functions are not detected.

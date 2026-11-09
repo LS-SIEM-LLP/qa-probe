@@ -140,6 +140,11 @@ const AnalyzeRuntimeSchema = z.object({
   }).prefault({}),
   navigationTimeoutMs: z.number().default(30000),
   captureWindowMs: z.number().default(5000),
+  // Sign in the same way the probe does and send that header from the browser too, so pages behind a login can be traced.
+  useProbeAuth: z.boolean().default(false),
+  // Path to an existing Chromium when Playwright's own browser is not installed.
+  executablePath: z.string().optional(),
+  extraHTTPHeaders: z.record(z.string(), z.string()).optional(),
 });
 
 const LlmRepairSchema = z.object({
@@ -175,6 +180,8 @@ const ProbeSchema = z.object({
   postBodyMode: z.enum(['empty', 'minimal', 'realistic', 'example', 'har']).default('minimal'),
   postBodyOverrides: z.record(z.string(), z.enum(['empty', 'minimal', 'realistic', 'example', 'har'])).prefault({}),
   pathParamValues: z.record(z.string(), z.string()).default({ id: '1' }),
+  // Values for required query parameters, by name, when the spec gives none (for example { center_entity: 'host-1' }).
+  queryParamValues: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).prefault({}),
   sse: SseSchema.prefault({}),
   ws: WsSchema.prefault({}),
   visual: VisualProbeSchema.prefault({}),
